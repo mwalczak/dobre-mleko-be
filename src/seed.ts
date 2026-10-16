@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { ensureAdmins } from './auth.js';
 import { createDb, migrate, type Sql } from './db.js';
-import { DEFAULT_CATEGORIES, monthStart, type DefaultCategory } from './domain.js';
+import { DEFAULT_CATEGORIES, localDate, monthStart, type DefaultCategory } from './domain.js';
 import { PhotoStore, processImage, sha256 } from './photo-store.js';
 
 export interface SeedOptions {
@@ -210,11 +210,74 @@ const clampScore = (x: number) => Math.min(5, Math.max(1, Math.round(x)));
 const daysAgo = (now: Date, d: number) => new Date(now.getTime() - d * 86400000);
 
 /** Wipes users and all content, including their photo files. Keeps settings. */
+/** Wishlist fixtures: in Warsaw and further away (trips). */
+const WISHLIST_IDEAS = [
+  {
+    name: 'Hala Gwardii',
+    lat: 52.2384,
+    lng: 20.9971,
+    address: 'Żelazna 59',
+    description: 'Street food w hali',
+    url: 'https://halagwardii.pl',
+  },
+  {
+    name: 'Kopiec Powstania Warszawskiego',
+    lat: 52.2071,
+    lng: 21.0372,
+    address: 'Bartycka',
+    description: 'Widok na miasto o zachodzie',
+    url: null,
+  },
+  {
+    name: 'Neon Muzeum',
+    lat: 52.2495,
+    lng: 21.0656,
+    address: 'Mińska 25',
+    description: null,
+    url: 'https://neonmuzeum.org',
+  },
+  { name: 'Plaża Poniatówka', lat: 52.2377, lng: 21.0447, address: null, description: 'Leżaki nad Wisłą', url: null },
+  {
+    name: 'Zamek Książ',
+    lat: 50.8423,
+    lng: 16.2919,
+    address: 'Piastów Śląskich 1, Wałbrzych',
+    description: 'Na weekend',
+    url: 'https://ksiaz.walbrzych.pl',
+  },
+  {
+    name: 'Morskie Oko',
+    lat: 49.2013,
+    lng: 20.0717,
+    address: null,
+    description: 'Wcześnie rano, zanim dojadą autokary',
+    url: null,
+  },
+  {
+    name: 'Výletní restaurant Jachta',
+    lat: 49.5254551,
+    lng: 17.8519913,
+    address: 'Hustopeče nad Bečvou 332',
+    description: 'Na rowerach nad Bečvą',
+    url: 'https://maps.app.goo.gl/xTag6qQGCPnVboTDA',
+  },
+  {
+    name: 'Mleczarnia Jama Michalika',
+    lat: 50.0626,
+    lng: 19.9398,
+    address: 'Floriańska 45, Kraków',
+    description: null,
+    url: null,
+  },
+] as const;
+
 export async function resetData(sql: Sql, store: PhotoStore): Promise<void> {
   const files = await sql<{ hash: string }[]>`
     select hash from place_photos union select avatar_hash from users where avatar_hash is not null
   `;
-  await sql`truncate users, places, place_photos, ratings, stars, comments, saved_places, allowed_emails cascade`;
+  await sql`
+    truncate users, places, place_photos, ratings, stars, comments, saved_places, wishlist_items, allowed_emails cascade
+  `;
   for (const f of files) await store.remove(f.hash);
 }
 
@@ -401,6 +464,25 @@ export async function seed(sql: Sql, store: PhotoStore, opts: SeedOptions = {}) 
   );
   await sql`insert into saved_places ${sql(saved)}`;
 
+  // Wishlists: places people want to visit, some already visited ----------------------------------------------
+  const wishlist = users.flatMap((u) =>
+    r.sample(WISHLIST_IDEAS, r.int(1, 4)).map((idea) => {
+      const visited = r.int(0, 3) === 0;
+      return {
+        user_id: u.id,
+        name: idea.name,
+        lat: idea.lat,
+        lng: idea.lng,
+        address: idea.address,
+        description: idea.description,
+        url: idea.url,
+        visited_on: visited ? localDate(daysAgo(now, r.int(3, 90)), timeZone) : null,
+        created_at: daysAgo(now, r.int(5, 150)),
+      };
+    }),
+  );
+  await sql`insert into wishlist_items ${sql(wishlist)}`;
+
   return {
     users: users.length,
     places: places.length,
@@ -409,6 +491,7 @@ export async function seed(sql: Sql, store: PhotoStore, opts: SeedOptions = {}) 
     stars: stars.length,
     comments: comments.length,
     saved: saved.length,
+    wishlist: wishlist.length,
   };
 }
 

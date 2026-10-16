@@ -189,8 +189,9 @@ export async function loadPlace(ctx: Ctx, placeId: string, userId: string, near?
     sql<{ stars: number; n: number }[]>`
       select round(overall)::int as stars, count(*)::int as n from ratings where place_id = ${placeId} group by 1
     `,
-    sql<{ vibe: number; offer: number; service: number | null; value: number | null }[]>`
-      select vibe, offer, service, value from ratings where place_id = ${placeId} and user_id = ${userId}
+    sql<{ vibe: number; offer: number; service: number | null; value: number | null; visited_on: string | null }[]>`
+      select vibe, offer, service, value, to_char(visited_on, 'YYYY-MM-DD') as visited_on
+      from ratings where place_id = ${placeId} and user_id = ${userId}
     `,
     sql<{ profile: ProfileJson }[]>`
       select profile_json(u) as profile from stars s join users u on u.id = s.user_id
@@ -223,7 +224,8 @@ export async function loadPlace(ctx: Ctx, placeId: string, userId: string, near?
     criteria: breakdown,
     strongest_criterion: (strongest?.key ?? null) as CriterionKey | null,
     rating_distribution: dist,
-    my_scores: mine ?? null,
+    my_scores: mine ? { vibe: mine.vibe, offer: mine.offer, service: mine.service, value: mine.value } : null,
+    my_visited_on: mine?.visited_on ?? null,
     gold_star_awarders: awarders.map((a) => toProfile(a.profile, ctx.urls)),
     my_gold_star: myStar ? { awarded_at: myStar.created_at.toISOString() } : null,
     can_revoke_gold_star: !!myStar,

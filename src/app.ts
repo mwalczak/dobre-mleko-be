@@ -44,6 +44,7 @@ import { photoRoutes } from './routes/photos.js';
 import { placeRoutes } from './routes/places.js';
 import { ratingRoutes } from './routes/ratings.js';
 import { statsRoutes } from './routes/stats.js';
+import { wishlistRoutes } from './routes/wishlist.js';
 import { ErrorBody } from './schemas.js';
 import { PHOTO_BYTES_CEILING, Settings } from './settings.js';
 import {
@@ -231,6 +232,7 @@ export async function buildApp(deps: AppDeps) {
     meRoutes,
     placeRoutes,
     ratingRoutes,
+    wishlistRoutes,
     commentRoutes,
     photoRoutes,
     statsRoutes,

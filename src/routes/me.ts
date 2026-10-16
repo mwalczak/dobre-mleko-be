@@ -145,7 +145,7 @@ export function meRoutes(app: App, ctx: Ctx) {
         summary: 'Delete my account',
         description:
           'Removes the personal data: e-mail, name, badge, avatar, Google/Apple ids, favourite categories, saved ' +
-          'places, devices and the place on the access list. Places, ratings, photos and comments stay, shown as ' +
+          'places, the wishlist, devices and the place on the access list. Places, ratings, photos and comments stay, shown as ' +
           'by "Były członek" (status `deleted`). Every session ends. Signing in again with the same e-mail starts ' +
           'a new account, once an admin puts it back on the list. ADMIN_EMAILS admins stay on the list.',
       },
@@ -163,6 +163,7 @@ export function meRoutes(app: App, ctx: Ctx) {
           where id = ${req.user.id}
         `;
         await tx`delete from saved_places where user_id = ${req.user.id}`;
+        await tx`delete from wishlist_items where user_id = ${req.user.id}`;
         await tx`delete from devices where user_id = ${req.user.id}`;
         if (!ctx.config.ADMIN_EMAILS.includes(user!.email)) {
           await tx`delete from allowed_emails where email = ${user!.email}`;
@@ -288,12 +289,13 @@ export function meRoutes(app: App, ctx: Ctx) {
           service: number | null;
           value: number | null;
           overall: number;
+          visited_on: string | null;
           updated_at: Date;
           total: number;
         }[]
       >`
         select r.place_id, p.name as place_name, p.category, r.vibe, r.offer, r.service, r.value, r.overall,
-               r.updated_at, (count(*) over ())::int as total
+               to_char(r.visited_on, 'YYYY-MM-DD') as visited_on, r.updated_at, (count(*) over ())::int as total
         from ratings r join places p on p.id = r.place_id
         where r.user_id = ${req.user.id}
         order by r.updated_at desc, r.place_id
@@ -304,6 +306,7 @@ export function meRoutes(app: App, ctx: Ctx) {
           place: { id: r.place_id, name: r.place_name, category_id: r.category },
           scores: { vibe: r.vibe, offer: r.offer, service: r.service, value: r.value },
           overall: r.overall,
+          visited_on: r.visited_on,
           updated_at: r.updated_at.toISOString(),
         })),
         offset,

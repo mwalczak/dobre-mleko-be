@@ -134,7 +134,8 @@ and `cursor` and return `{ items, next_cursor, total }`. Errors are `{"error": "
 | Sign-in | `POST /auth/google {id_token}`, `POST /auth/apple {id_token, name?}` → `{token, expires_at, has_profile, user}`; `POST /auth/dev` (development) |
 | Me | `GET /me`, `POST /me/profile` (onboarding), `PATCH\|DELETE /me`, `PUT\|DELETE /me/avatar`, `GET /me/gold-stars`, `GET /me/saved`, `GET /me/ratings` |
 | Places | `GET /places` (search), `POST /places`, `GET\|PATCH\|DELETE /places/{id}`, `PUT\|DELETE /places/{id}/saved`, `GET /tags` (tag suggestions), `POST /maps-links/resolve` (read a Google Maps link) |
-| Ratings | `PUT\|DELETE /places/{id}/rating`, `POST\|DELETE /places/{id}/gold-star` |
+| Ratings | `PUT\|DELETE /places/{id}/rating` (optional `visited_on`), `POST\|DELETE /places/{id}/gold-star` |
+| Wishlist | `GET\|POST /me/wishlist`, `PATCH\|DELETE /me/wishlist/{id}`, `GET /wishlist/{id}`, `GET /members/{id}/wishlist`, `GET /wishlist?bbox=` (map layer) |
 | Comments | `GET\|POST /places/{id}/comments`, `PATCH\|DELETE /comments/{id}` |
 | Photos | `POST /photos` (upload), `DELETE /photos/{id}`, `GET /files/{hash}[/thumb]?exp&sig` (signed) |
 | Stats | `GET /stats/network`, `GET /stats/me` |
@@ -153,8 +154,17 @@ shows onboarding and finishes it with `POST /me/profile`: display name, badge (u
 it) and up to 3 favourite categories. Profiles shown to others never include the e-mail.
 
 `DELETE /me` deletes the account (App Store requirement): the personal data goes (e-mail, name, badge, avatar,
-Google/Apple ids, favourites, saved places, devices, the access-list entry), places, ratings, photos and comments
+Google/Apple ids, favourites, saved places, the wishlist, devices, the access-list entry), places, ratings, photos and comments
 stay, shown as by "Były członek" (status `deleted`).
+
+### Wishlist
+
+Places someone wants to visit, seen by everyone in the network: on profiles (`GET /members/{id}/wishlist`) and
+as a map layer (`GET /wishlist?bbox=`, not yet visited only unless `visited=true`). Not regular places: a name, a
+point, an optional address, description (up to 1000 characters) and http(s) link — no category, ratings or
+photos. `PATCH /me/wishlist/{id}` with `visited_on` (a date, not in the future) marks it visited; it stays on the
+list, and once added as a regular place `place_id` links it. Ratings take the same optional `visited_on` (when I
+was there; `my_visited_on` in the place, `visited_on` in `GET /me/ratings`, never shown to others).
 
 Every request re-checks the whitelist, the role and the account status, so removing someone, changing their role
 or suspending them applies to existing sessions immediately. Their content stays.

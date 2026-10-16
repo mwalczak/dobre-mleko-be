@@ -8,6 +8,7 @@ const criterionKey = z.enum(CRITERIA.map((c) => c.key) as ['vibe', 'offer', 'ser
 const isoDate = z.string().meta({ format: 'date-time' });
 const score = z.number().int().min(1).max(5);
 const category = z.string().meta({ description: 'A category id; `category_details` in GET /meta describes it' });
+const calendarDate = z.string().meta({ format: 'date', example: '2026-10-12' });
 const nextCursor = z.string().nullable().meta({ description: 'Pass as `cursor` for the next page; null at the end' });
 
 export const ErrorBody = z
@@ -188,6 +189,7 @@ export const PlaceDetail = PlaceSummary.extend({
     .object({ 1: z.number().int(), 2: z.number().int(), 3: z.number().int(), 4: z.number().int(), 5: z.number().int() })
     .meta({ description: 'Overall ratings rounded to whole stars' }),
   my_scores: Scores.nullable(),
+  my_visited_on: calendarDate.nullable().meta({ description: 'When I was there (with my rating); null if not given' }),
   gold_star_awarders: z.array(Profile).meta({ description: 'Everyone who gave a gold star, newest first' }),
   my_gold_star: z.object({ awarded_at: isoDate }).nullable().meta({ description: 'My star this month' }),
   can_revoke_gold_star: z.boolean(),
@@ -203,6 +205,7 @@ export const MyRatingList = z
         place: z.object({ id: z.uuid(), name: z.string(), category_id: category }),
         scores: Scores,
         overall: z.number(),
+        visited_on: calendarDate.nullable().meta({ description: 'When I was there; null if not given' }),
         updated_at: isoDate,
       }),
     ),
@@ -464,3 +467,25 @@ export const ResolvedMapsLink = z
       .meta({ description: 'Places already in the app within 150 m, likeliest duplicates first' }),
   })
   .meta({ id: 'ResolvedMapsLink' });
+
+export const WishlistItem = z
+  .object({
+    id: z.uuid(),
+    name: z.string(),
+    lat: z.number(),
+    lng: z.number(),
+    address: z.string().nullable(),
+    description: z.string().nullable(),
+    url: z.string().nullable().meta({ description: 'A link with more (website, Google Maps, article)' }),
+    visited_on: calendarDate.nullable().meta({ description: 'Set once the owner has been there' }),
+    place_id: z.uuid().nullable().meta({ description: 'The regular place it was added as after the visit' }),
+    owner: Profile,
+    is_mine: z.boolean(),
+    created_at: isoDate,
+    updated_at: isoDate.nullable(),
+  })
+  .meta({ id: 'WishlistItem', description: 'A place someone wants to visit — no category, ratings or photos' });
+
+export const WishlistItemList = z
+  .object({ items: z.array(WishlistItem), next_cursor: nextCursor, total: z.number().int() })
+  .meta({ id: 'WishlistItemList' });

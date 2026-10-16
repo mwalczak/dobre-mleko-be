@@ -55,6 +55,11 @@ function zonedParts(date: Date, timeZone: string) {
   };
 }
 
+/** Today's date in the given time zone, as YYYY-MM-DD (visit dates may not be later). */
+export function localDate(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
 /** First day of the current month in the given time zone, as YYYY-MM-DD. Stars are counted per such month. */
 export function monthStart(date: Date, timeZone: string): string {
   const { year, month } = zonedParts(date, timeZone);
