@@ -316,11 +316,20 @@ and `GET /stats/network`; sign-in uses `GET /meta` (`google_web_client_id`, `dev
 
 ### Issue reports
 
-`GET /reports` and `POST /reports` are a thin layer over [PMO](https://github.com/mwalczak/pmo), the issue
-tracker: this API calls it server-to-server with the `dobre-mleko.app` key (`PMO_API_KEY`, never sent to clients)
-and files every report with the signed-in member's e-mail and name. PMO creates an account for a new reporter and
-e-mails them a personal key, then e-mails them when the status of their reports changes. Abuse reports are private
-in PMO, so they never appear in `GET /reports`. The web app's `/report` page uses both endpoints.
+`/reports` is a thin layer over [PMO](https://github.com/mwalczak/pmo), the issue tracker, built the way PMO's
+[`pmo-thin-client` skill](https://github.com/mwalczak/pmo/blob/main/.claude/skills/pmo-thin-client/SKILL.md)
+describes. This API calls PMO server-to-server with the `dobre-mleko.app` key (`PMO_API_KEY`, never sent to
+clients):
+
+- `GET /reports/options`: the issue types and platforms to offer, with their Polish labels, as configured on the
+  `DM` project in PMO (cached for 5 minutes). Nothing about the form is hardcoded in the apps.
+- `POST /reports` (multipart): files the report with the signed-in member's e-mail and name, then uploads up to 3
+  screenshots or recordings (50 MB each; temp files on disk, streamed to PMO). PMO creates an account for a new
+  reporter, e-mails them a personal key, and e-mails them when their reports' status changes.
+- `GET /reports`: open or closed reports, with typo-tolerant search. Abuse reports are private in PMO and never
+  listed.
+
+The web app's `/report` page uses all three.
 
 ### Project layout
 

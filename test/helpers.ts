@@ -84,23 +84,39 @@ const fakeMapsFetch: typeof fetch = async (input) => {
 };
 
 /**
- * A fake PMO (the issue tracker behind /reports) holding issues in memory. It records requests, hides private
- * issues from listings like the real one, and answers `status` with an error while set.
+ * A fake PMO (the issue tracker behind /reports) holding issues in memory. It records requests, serves the DM
+ * project's options, hides private issues from listings like the real one, accepts image and video attachments
+ * (rejecting `.bad` file names), and answers `status` with an error while set.
  */
 export class FakePmo {
   issues: Record<string, unknown>[] = [];
+  attachments: { issue: string; filename: string; type: string; size: number }[] = [];
   requests: { method: string; url: string; authorization: string | null; body: Record<string, unknown> | null }[] = [];
   status: number | null = null;
+  options = {
+    issue_types: [
+      { id: 'bug', label: 'Błąd' },
+      { id: 'idea', label: 'Pomysł' },
+      { id: 'abuse', label: 'Nadużycie' },
+    ],
+    platforms: [
+      { id: 'web', label: 'Web' },
+      { id: 'android', label: 'Android' },
+      { id: 'ios', label: 'iOS' },
+    ],
+  };
 
   reset() {
     this.issues = [];
+    this.attachments = [];
     this.requests = [];
     this.status = null;
   }
 
   fetch: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
-    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    const form = init?.body instanceof FormData ? init.body : null;
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
     const headers = new Headers(init?.headers);
     this.requests.push({
       method: init?.method ?? 'GET',
@@ -110,6 +126,15 @@ export class FakePmo {
     });
     if (this.status)
       return Response.json({ error: 'x', message: `fake PMO error ${this.status}` }, { status: this.status });
+    if (url.pathname === '/v1/projects/DM') return Response.json({ key: 'DM', ...this.options });
+    const attachment = url.pathname.match(/^\/v1\/issues\/(DM-\d+)\/attachments$/);
+    if (attachment && form) {
+      const file = form.get('file') as File;
+      if (file.name.endsWith('.bad'))
+        return Response.json({ error: 'unsupported_type', message: 'no' }, { status: 415 });
+      this.attachments.push({ issue: attachment[1]!, filename: file.name, type: file.type, size: file.size });
+      return Response.json({ id: `att-${this.attachments.length}`, kind: file.type.split('/')[0] }, { status: 201 });
+    }
     if (url.pathname !== '/v1/projects/DM/issues')
       return Response.json({ error: 'not_found', message: 'project not found' }, { status: 404 });
     if (init?.method === 'POST') {
@@ -124,6 +149,7 @@ export class FakePmo {
         status: 'reported',
         title: body.title,
         description: body.description,
+        platform: body.platform,
         private: body.type === 'abuse',
         reporter: { id: 'u', name: body.reporter.name },
         milestone: null,

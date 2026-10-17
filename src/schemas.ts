@@ -490,20 +490,37 @@ export const WishlistItemList = z
   .object({ items: z.array(WishlistItem), next_cursor: nextCursor, total: z.number().int() })
   .meta({ id: 'WishlistItemList' });
 
+const ReportChoice = z
+  .object({ id: z.string(), label: z.string().meta({ description: 'In the project’s language, as set in PMO' }) })
+  .meta({ id: 'ReportChoice' });
+
+export const ReportOptions = z
+  .object({
+    issue_types: z.array(ReportChoice).meta({ description: 'Types to offer, in order (e.g. bug, idea, abuse)' }),
+    platforms: z.array(ReportChoice).meta({ description: 'Platforms to offer, e.g. web, android, ios' }),
+  })
+  .meta({ id: 'ReportOptions', description: 'What the report form offers, configured in the issue tracker (PMO).' });
+
 export const Report = z
   .object({
     key: z.string().meta({ example: 'DM-12' }),
-    type: z.enum(['bug', 'idea', 'abuse']),
+    type: z.string().meta({ description: 'An id from `issue_types` in GET /reports/options' }),
     status: z.enum(['reported', 'accepted', 'in_progress', 'done', 'wont_fix', 'duplicate']),
     priority: z.string().meta({ description: 'P1 (most urgent) to P5, set by the admins' }),
     title: z.string(),
     description: z.string().nullable(),
+    platform: z.string().nullable().meta({ description: 'An id from `platforms` in GET /reports/options' }),
     private: z.boolean().meta({ description: 'Only the admins and the reporter see it (abuse reports)' }),
     duplicate_of: z.string().nullable().meta({ description: 'Key of the original report, when a duplicate' }),
     created_at: isoDate,
     updated_at: isoDate,
   })
   .meta({ id: 'Report', description: 'A bug report, idea or abuse report, as tracked in PMO.' });
+
+export const CreatedReport = Report.extend({
+  attachments: z.number().int().meta({ description: 'Files attached' }),
+  failed_files: z.array(z.string()).meta({ description: 'Names of files the tracker did not accept' }),
+}).meta({ id: 'CreatedReport' });
 
 export const ReportList = z
   .object({
