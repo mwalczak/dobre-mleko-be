@@ -489,3 +489,29 @@ export const WishlistItem = z
 export const WishlistItemList = z
   .object({ items: z.array(WishlistItem), next_cursor: nextCursor, total: z.number().int() })
   .meta({ id: 'WishlistItemList' });
+
+export const Report = z
+  .object({
+    key: z.string().meta({ example: 'DM-12' }),
+    type: z.enum(['bug', 'idea', 'abuse']),
+    status: z.enum(['reported', 'accepted', 'in_progress', 'done', 'wont_fix', 'duplicate']),
+    priority: z.string().meta({ description: 'P1 (most urgent) to P5, set by the admins' }),
+    title: z.string(),
+    description: z.string().nullable(),
+    private: z.boolean().meta({ description: 'Only the admins and the reporter see it (abuse reports)' }),
+    duplicate_of: z.string().nullable().meta({ description: 'Key of the original report, when a duplicate' }),
+    created_at: isoDate,
+    updated_at: isoDate,
+  })
+  .meta({ id: 'Report', description: 'A bug report, idea or abuse report, as tracked in PMO.' });
+
+export const ReportList = z
+  .object({
+    items: z.array(Report),
+    next_offset: z
+      .number()
+      .int()
+      .nullable()
+      .meta({ description: 'Pass as `offset` for the next page; null at the end' }),
+  })
+  .meta({ id: 'ReportList' });

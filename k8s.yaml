@@ -1,5 +1,5 @@
 # Applied by .github/workflows/deploy.yml. The `dobre-mleko` secret (DB password, JWT secret,
-# whitelist, Google client IDs) is created by the workflow from repository secrets.
+# whitelist, Google client IDs, PMO) is created by the workflow from repository secrets.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -116,6 +116,11 @@ spec:
             # Push notifications on Android (FCM): the Firebase service account key file; empty turns them off.
             - name: FCM_SERVICE_ACCOUNT
               valueFrom: { secretKeyRef: { name: dobre-mleko, key: FCM_SERVICE_ACCOUNT } }
+            # Issue reports (/reports) go to PMO with this app's key; empty values turn reporting off.
+            - name: PMO_API_URL
+              valueFrom: { secretKeyRef: { name: dobre-mleko, key: PMO_API_URL } }
+            - name: PMO_API_KEY
+              valueFrom: { secretKeyRef: { name: dobre-mleko, key: PMO_API_KEY } }
             - { name: PHOTO_DIR, value: /data/photos }
             # Unique per workflow run, so re-running the deploy after changing secrets restarts the pod.
             - { name: DEPLOY_ID, value: DEPLOY_ID_PLACEHOLDER }

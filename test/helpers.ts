@@ -27,6 +27,8 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
     GOOGLE_CLIENT_IDS: 'test-client',
     JWT_SECRET: 'test-secret-test-secret-test-secret-123',
     PHOTO_DIR,
+    PMO_API_URL: 'https://pmo.test',
+    PMO_API_KEY: 'pmo_a_test',
     ...overrides,
   });
 }
@@ -81,6 +83,79 @@ const fakeMapsFetch: typeof fetch = async (input) => {
   return new Response(null, target ? { status: 302, headers: { location: target } } : { status: 404 });
 };
 
+/**
+ * A fake PMO (the issue tracker behind /reports) holding issues in memory. It records requests, hides private
+ * issues from listings like the real one, and answers `status` with an error while set.
+ */
+export class FakePmo {
+  issues: Record<string, unknown>[] = [];
+  requests: { method: string; url: string; authorization: string | null; body: Record<string, unknown> | null }[] = [];
+  status: number | null = null;
+
+  reset() {
+    this.issues = [];
+    this.requests = [];
+    this.status = null;
+  }
+
+  fetch: typeof fetch = async (input, init) => {
+    const url = new URL(String(input));
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    const headers = new Headers(init?.headers);
+    this.requests.push({
+      method: init?.method ?? 'GET',
+      url: url.pathname + url.search,
+      authorization: headers.get('authorization'),
+      body,
+    });
+    if (this.status)
+      return Response.json({ error: 'x', message: `fake PMO error ${this.status}` }, { status: this.status });
+    if (url.pathname !== '/v1/projects/DM/issues')
+      return Response.json({ error: 'not_found', message: 'project not found' }, { status: 404 });
+    if (init?.method === 'POST') {
+      const n = this.issues.length + 1;
+      const issue = {
+        id: `id-${n}`,
+        key: `DM-${n}`,
+        project: 'DM',
+        number: n,
+        type: body.type,
+        priority: 'P3',
+        status: 'reported',
+        title: body.title,
+        description: body.description,
+        private: body.type === 'abuse',
+        reporter: { id: 'u', name: body.reporter.name },
+        milestone: null,
+        duplicate_of: null,
+        source_app: 'dobre-mleko.app',
+        created_at: new Date(Date.UTC(2026, 9, 11, 12, n)).toISOString(),
+        updated_at: new Date(Date.UTC(2026, 9, 11, 12, n)).toISOString(),
+      };
+      this.issues.push(issue);
+      return Response.json(issue, { status: 201 });
+    }
+    const status = url.searchParams.get('status');
+    const statuses =
+      status === 'open'
+        ? ['reported', 'accepted', 'in_progress']
+        : status === 'closed'
+          ? ['done', 'wont_fix', 'duplicate']
+          : null;
+    const q = url.searchParams.get('q')?.toLowerCase();
+    const items = this.issues
+      .filter((i) => !i.private && (!statuses || statuses.includes(i.status as string)))
+      .filter((i) => !q || String(i.title).toLowerCase().includes(q))
+      .reverse();
+    const limit = Number(url.searchParams.get('limit') ?? 50);
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const more = items.length > offset + limit;
+    return Response.json({ items: items.slice(offset, offset + limit), next_offset: more ? offset + limit : null });
+  };
+}
+
+export const pmo = new FakePmo();
+
 /** The categories migration 007 creates, restored before each test. */
 let defaultCategories: Record<string, unknown>[] = [];
 let defaultIcons: Record<string, unknown>[] = [];
@@ -105,6 +180,7 @@ export function setup(): Harness {
         settingsCacheMs: 0,
         pushSender: pushes,
         fetchMapsLink: fakeMapsFetch,
+        fetchPmo: pmo.fetch,
       });
     h.app = await h.build();
   });
@@ -114,6 +190,7 @@ export function setup(): Harness {
     await h.sql`truncate users, places, place_photos, ratings, stars, comments, saved_places, allowed_emails, settings, categories, icons, push_log cascade`;
     pushes.sent = [];
     pushes.gone.clear();
+    pmo.reset();
     await h.sql`insert into icons ${h.sql(defaultIcons)}`;
     await h.sql`insert into categories ${h.sql(defaultCategories)}`;
     rmSync(PHOTO_DIR, { recursive: true, force: true });

@@ -30,6 +30,7 @@ import type { Sql } from './db.js';
 import { HttpError } from './errors.js';
 import { FileUrls } from './file-urls.js';
 import { PhotoStore } from './photo-store.js';
+import { Pmo } from './pmo.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { categoryRoutes } from './routes/categories.js';
@@ -43,6 +44,7 @@ import { tagRoutes } from './routes/tags.js';
 import { photoRoutes } from './routes/photos.js';
 import { placeRoutes } from './routes/places.js';
 import { ratingRoutes } from './routes/ratings.js';
+import { reportRoutes } from './routes/reports.js';
 import { statsRoutes } from './routes/stats.js';
 import { wishlistRoutes } from './routes/wishlist.js';
 import { ErrorBody } from './schemas.js';
@@ -70,6 +72,8 @@ export interface AppDeps {
   pushSender?: PushSender;
   /** Fetch for following Google Maps short links (tests). */
   fetchMapsLink?: typeof fetch;
+  /** Fetch for calls to PMO, the issue tracker (tests). */
+  fetchPmo?: typeof fetch;
 }
 
 export interface Ctx {
@@ -90,6 +94,8 @@ export interface Ctx {
   notifier: Notifier;
   /** Follows Google Maps short links. */
   fetchMapsLink: typeof fetch;
+  /** The issue tracker behind /reports. */
+  pmo: Pmo;
   now: () => Date;
 }
 
@@ -204,6 +210,12 @@ export async function buildApp(deps: AppDeps) {
       app.log.error({ err: error }, 'push notification failed'),
     ),
     fetchMapsLink: deps.fetchMapsLink ?? fetch,
+    pmo: new Pmo({
+      url: config.PMO_API_URL,
+      key: config.PMO_API_KEY,
+      project: config.PMO_PROJECT,
+      fetch: deps.fetchPmo ?? fetch,
+    }),
     now,
   };
   app.addHook('onClose', async () => {
@@ -240,6 +252,7 @@ export async function buildApp(deps: AppDeps) {
     categoryRoutes,
     iconRoutes,
     pushRoutes,
+    reportRoutes,
   ]) {
     routes(app, ctx);
   }

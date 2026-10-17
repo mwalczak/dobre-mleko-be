@@ -96,6 +96,7 @@ Environment variables (see `.env.example`):
 | `APNS_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | – | Push notifications: the APNs auth key (.p8 contents; `\n` escapes accepted), its key id and the Apple team id. Without them nothing is sent |
 | `APNS_APP_IDS` | any | Bundle ids iOS devices may register with (the APNs topics), e.g. `pl.dobremleko.app,pl.dobremleko.app.dev` |
 | `FCM_SERVICE_ACCOUNT` | – | Android push: the Firebase service account's JSON key file contents. Without it Android devices are registered but not sent to |
+| `PMO_API_URL` · `PMO_API_KEY` · `PMO_PROJECT` | – · – · `DM` | [PMO](https://github.com/mwalczak/pmo), the issue tracker behind `/reports`: its URL, this app's key (`pmo_a_…`) and the project. Without them `/reports` answers 503 |
 | `DEV_LOGIN` | `false` | Enables `POST /auth/dev` (ignored when `NODE_ENV=production`) |
 | `PORT` · `NODE_ENV` | `8080` · `development` | |
 
@@ -128,6 +129,7 @@ and `cursor` and return `{ items, next_cursor, total }`. Errors are `{"error": "
 | `rating_needs_photo` · `too_many_photos` · `place_exists` | 409 | Other conflicts (`place_exists` carries `place_id`) |
 | `unsupported_type` · `file_too_large` | 415 · 413 | Uploads |
 | `email_not_verified` · `invalid_google_token` | 403 · 401 | Sign-in |
+| `reports_unavailable` | 503 | The issue tracker (PMO) is not configured or cannot be reached |
 
 | Area | Endpoints |
 |---|---|
@@ -312,13 +314,22 @@ from their own domain, and nginx there proxies `/api/*` and `/files/*` to this A
 browser sees one origin (no CORS) and signed photo URLs work unchanged. The dashboard uses the `/admin/*` endpoints
 and `GET /stats/network`; sign-in uses `GET /meta` (`google_web_client_id`, `dev_login`).
 
+### Issue reports
+
+`GET /reports` and `POST /reports` are a thin layer over [PMO](https://github.com/mwalczak/pmo), the issue
+tracker: this API calls it server-to-server with the `dobre-mleko.app` key (`PMO_API_KEY`, never sent to clients)
+and files every report with the signed-in member's e-mail and name. PMO creates an account for a new reporter and
+e-mails them a personal key, then e-mails them when the status of their reports changes. Abuse reports are private
+in PMO, so they never appear in `GET /reports`. The web app's `/report` page uses both endpoints.
+
 ### Project layout
 
 ```
 src/
   server.ts          startup: config, migrations, admins, hourly cleanup of unattached uploads
   app.ts             Fastify app, error format, OpenAPI
-  routes/            one file per area (auth, me, places, ratings, comments, photos, stats, meta, admin)
+  routes/            one file per area (auth, me, places, ratings, comments, photos, stats, meta, admin, reports)
+  pmo.ts             client for PMO, the issue tracker behind /reports
   places-query.ts    the shared search and ranking query
   rating-logic.ts    photos-per-rating rule and gold star quota
   photo-store.ts     files on the volume; uploads.ts reads multipart images; file-urls.ts signs URLs
@@ -356,6 +367,7 @@ Repository variables: `API_HOST` (the API's domain), `GOOGLE_CLIENT_IDS`, `GOOGL
 `APPLE_CLIENT_IDS` (defaults to `APNS_APP_IDS`).
 Push notifications: secret `APNS_KEY` (the .p8 file's contents), variables `APNS_KEY_ID`, `APNS_TEAM_ID`,
 `APNS_APP_IDS`; Android — secret `FCM_SERVICE_ACCOUNT` (the service account's JSON key file).
+Issue reports: secrets `PMO_API_URL` and `PMO_API_KEY` (the `dobre-mleko.app` key in PMO).
 
 The whitelist and settings are managed at `https://<WEB_HOST>/admin/` (see dobre-mleko-web). Changing `ADMIN_EMAILS` needs the secret
 edited and the "Build and deploy" workflow re-run. After the first run, make the GHCR package public or add an

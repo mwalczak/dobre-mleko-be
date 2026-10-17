@@ -44,6 +44,10 @@ const schema = z.object({
   // Firebase Cloud Messaging (Android): the service account's JSON key file contents. Without it Android devices
   // are registered but not sent to.
   FCM_SERVICE_ACCOUNT: z.string().default(''),
+  // PMO, the issue tracker behind /reports: its URL, this app's key and the project. Empty: reporting is off.
+  PMO_API_URL: z.string().trim().default(''),
+  PMO_API_KEY: z.string().trim().default(''),
+  PMO_PROJECT: z.string().trim().default('DM'),
 });
 
 export type Config = z.infer<typeof schema>;
