@@ -112,6 +112,8 @@ describe('reports', () => {
     ]) {
       await report(h.app, ola, { type: type!, title: title! });
     }
+    // An admin's todo in PMO: not something members report, so not listed.
+    pmo.issues.push({ ...pmo.issues[0], key: 'DM-4', type: 'todo', title: 'Odnowić certyfikat' });
     pmo.requests = [];
 
     const all = await h.app.inject({ method: 'GET', url: '/reports?status=open', headers: ola.headers });

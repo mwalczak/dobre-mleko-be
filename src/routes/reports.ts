@@ -65,7 +65,8 @@ export function reportRoutes(app: App, ctx: Ctx) {
         summary: 'Reported issues',
         description:
           'Bugs, ideas and abuse reports members have filed, newest first, so they can check before filing the same ' +
-          'thing again. Abuse reports are private and never listed. `q` searches titles and descriptions, tolerating ' +
+          'thing again. Abuse reports are private and never listed, nor are types members cannot report (such as the ' +
+          'admins’ todos), so a page may hold fewer than `limit`. `q` searches titles and descriptions, tolerating ' +
           'typos, and sorts by relevance. 503 `reports_unavailable` when the issue tracker cannot be reached.',
         querystring: z.object({
           status: z.enum(['open', 'closed']).optional().meta({
@@ -79,8 +80,12 @@ export function reportRoutes(app: App, ctx: Ctx) {
       },
     },
     async (req) => {
-      const page = await viaPmo(() => pmo.listIssues({ ...req.query, q: req.query.q || undefined }));
-      return { items: page.items, next_offset: page.next_offset };
+      const [options, page] = await viaPmo(() =>
+        Promise.all([pmo.reportOptions(), pmo.listIssues({ ...req.query, q: req.query.q || undefined })]),
+      );
+      // Only what members can report: other types (e.g. the admins' todos) are internal.
+      const offered = new Set(options.issue_types.map((t) => t.id));
+      return { items: page.items.filter((i) => offered.has(i.type)), next_offset: page.next_offset };
     },
   );
 
