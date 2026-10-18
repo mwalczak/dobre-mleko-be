@@ -38,6 +38,7 @@ import { iconRoutes } from './routes/icons.js';
 import { pushRoutes } from './routes/push.js';
 import { commentRoutes } from './routes/comments.js';
 import { meRoutes } from './routes/me.js';
+import { memberRoutes } from './routes/members.js';
 import { mapsLinkRoutes } from './routes/maps-links.js';
 import { metaRoutes } from './routes/meta.js';
 import { tagRoutes } from './routes/tags.js';
@@ -242,6 +243,7 @@ export async function buildApp(deps: AppDeps) {
     mapsLinkRoutes,
     authRoutes,
     meRoutes,
+    memberRoutes,
     placeRoutes,
     ratingRoutes,
     wishlistRoutes,

@@ -295,15 +295,54 @@ describe('stats', () => {
       gold_stars: { given_total: 0, given_this_month: 0, left: 3 },
     });
     expect(
-      me.taste_matches.map((m: { profile: { display_name: string }; match: number }) => [
+      me.taste_matches.map((m: { profile: { display_name: string }; match: number; shared: number }) => [
         m.profile.display_name,
         m.match,
+        m.shared,
       ]),
     ).toEqual([
-      ['Kuba', 1],
-      ['Tomek', 0.009], // r = -0.982
+      ['Kuba', 0.688, 3], // r = 1, shrunk with 3 shared: 0.5 + 0.5 · 3 / 8
+      ['Tomek', 0.316, 3], // r = -0.982
     ]);
     expect(me.my_places_with_stars).toMatchObject([{ place: { id: ids[0] }, stars: 1 }]);
+  });
+
+  it('lists members with counts, last activity and taste match', async () => {
+    const ola = await login(h.app, 'ola@gmail.com');
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const tomek = await login(h.app, 'tomek@gmail.com');
+    const ids = [];
+    for (const [i, v] of [5, 4, 2, 3].entries()) {
+      ids.push(await createPlace(h.app, ola, { ...pawilon, name: `Miejsce ${i}` }, { vibe: v, offer: v }));
+    }
+    for (const [i, v] of [5, 4, 2, 3].entries()) await rate(h.app, kuba, ids[i]!, { vibe: v, offer: v });
+    // Two shared places only: no match yet.
+    for (const [i, v] of [5, 4].entries()) await rate(h.app, tomek, ids[i]!, { vibe: v, offer: v });
+    await h.app.inject({
+      method: 'POST',
+      url: '/me/wishlist',
+      headers: tomek.headers,
+      payload: { name: 'Jachta', lat: 52.2, lng: 21 },
+    });
+
+    const res = await h.app.inject({ method: 'GET', url: '/members', headers: ola.headers });
+    expect(res.statusCode).toBe(200);
+    const list = res.json();
+    expect(list.total).toBe(list.items.length);
+    const row = (name: string) =>
+      list.items.find((m: { profile: { display_name: string } }) => m.profile.display_name === name);
+    expect(list.items.slice(0, 3).map((m: { profile: { display_name: string } }) => m.profile.display_name)).toEqual([
+      'Tomek',
+      'Kuba',
+      'Ola',
+    ]);
+    expect(row('Ola')).toMatchObject({ places_added: 4, ratings: 4, wishlist_to_visit: 0, match: null, shared: null });
+    expect(row('Kuba')).toMatchObject({ places_added: 0, ratings: 4, match: 0.722, shared: 4 }); // 0.5 + 0.5 · 4/9
+    expect(row('Tomek')).toMatchObject({ ratings: 2, wishlist_to_visit: 1, match: null, shared: 2 });
+
+    await h.app.inject({ method: 'DELETE', url: '/me', headers: tomek.headers });
+    const after = (await h.app.inject({ method: 'GET', url: '/members', headers: ola.headers })).json();
+    expect(after.items.map((m: { profile: { id: string } }) => m.profile.id)).not.toContain(tomek.id);
   });
 
   it('exposes categories, criteria and limits', async () => {
