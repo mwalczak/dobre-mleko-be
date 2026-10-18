@@ -114,17 +114,26 @@ describe('reports', () => {
     }
     // An admin's todo in PMO: not something members report, so not listed.
     pmo.issues.push({ ...pmo.issues[0], key: 'DM-4', type: 'todo', title: 'Odnowić certyfikat' });
+    // Statuses pass through as PMO has them, including ones added later.
+    pmo.issues[0]!.status = 'waiting_for_release';
+    pmo.issues[2]!.status = 'some_future_status';
     pmo.requests = [];
 
     const all = await h.app.inject({ method: 'GET', url: '/reports?status=open', headers: ola.headers });
     expect(all.statusCode).toBe(200);
-    expect(all.json().items.map((r: { key: string }) => r.key)).toEqual(['DM-3', 'DM-1']);
+    expect(all.json().items.map((r: { key: string }) => r.key)).toEqual(['DM-1']);
+    const everything = await h.app.inject({ method: 'GET', url: '/reports', headers: ola.headers });
+    expect(everything.json().items.map((r: { key: string; status: string }) => [r.key, r.status])).toEqual([
+      ['DM-3', 'some_future_status'],
+      ['DM-1', 'waiting_for_release'],
+    ]);
     expect(all.json().next_offset).toBeNull();
 
     const found = await h.app.inject({ method: 'GET', url: '/reports?q=mapa&limit=5', headers: ola.headers });
     expect(found.json().items.map((r: { key: string }) => r.key)).toEqual(['DM-1']);
     expect(pmo.requests.map((r) => r.url)).toEqual([
       '/v1/projects/DM/issues?limit=30&offset=0&status=open',
+      '/v1/projects/DM/issues?limit=30&offset=0',
       '/v1/projects/DM/issues?limit=5&offset=0&q=mapa',
     ]);
   });

@@ -164,7 +164,7 @@ export class FakePmo {
     const status = url.searchParams.get('status');
     const statuses =
       status === 'open'
-        ? ['reported', 'accepted', 'in_progress']
+        ? ['reported', 'accepted', 'in_progress', 'in_review', 'waiting_for_release']
         : status === 'closed'
           ? ['done', 'wont_fix', 'duplicate']
           : null;

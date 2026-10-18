@@ -505,7 +505,11 @@ export const Report = z
   .object({
     key: z.string().meta({ example: 'DM-12' }),
     type: z.string().meta({ description: 'An id from `issue_types` in GET /reports/options' }),
-    status: z.enum(['reported', 'accepted', 'in_progress', 'done', 'wont_fix', 'duplicate']),
+    status: z.string().meta({
+      description:
+        'As tracked in PMO: `reported`, `accepted`, `in_progress`, `in_review`, `waiting_for_release`, `done`, ' +
+        '`wont_fix` or `duplicate`. Not a closed list: PMO may add statuses, so show unknown ones as they are.',
+    }),
     priority: z.string().meta({ description: 'P1 (most urgent) to P5, set by the admins' }),
     title: z.string(),
     description: z.string().nullable(),

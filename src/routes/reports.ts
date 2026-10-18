@@ -69,9 +69,14 @@ export function reportRoutes(app: App, ctx: Ctx) {
           'admins’ todos), so a page may hold fewer than `limit`. `q` searches titles and descriptions, tolerating ' +
           'typos, and sorts by relevance. 503 `reports_unavailable` when the issue tracker cannot be reached.',
         querystring: z.object({
-          status: z.enum(['open', 'closed']).optional().meta({
-            description: '`open`: reported, accepted or in progress; `closed`: done, won’t fix or duplicate',
-          }),
+          status: z
+            .enum(['open', 'closed'])
+            .optional()
+            .meta({
+              description:
+                '`open`: reported, accepted, in progress, in review or waiting for release; `closed`: done, won’t fix ' +
+                'or duplicate',
+            }),
           q: z.string().trim().max(200).optional(),
           limit: z.coerce.number().int().min(1).max(100).default(30),
           offset: z.coerce.number().int().min(0).default(0),

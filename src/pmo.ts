@@ -4,8 +4,6 @@
  */
 import { openAsBlob } from 'node:fs';
 
-export const ISSUE_STATUSES = ['reported', 'accepted', 'in_progress', 'done', 'wont_fix', 'duplicate'] as const;
-
 /** An issue type or platform the project offers, with the label to show (in the project's language). */
 export interface PmoChoice {
   id: string;
@@ -16,7 +14,8 @@ export interface PmoIssue {
   key: string;
   type: string;
   priority: string;
-  status: (typeof ISSUE_STATUSES)[number];
+  /** `reported`, `accepted`, `in_progress`, `in_review`, `waiting_for_release`, `done`, `wont_fix`, `duplicate`, … */
+  status: string;
   title: string;
   description: string | null;
   platform: string | null;
