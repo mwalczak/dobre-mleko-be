@@ -21,8 +21,17 @@ export interface PmoIssue {
   platform: string | null;
   private: boolean;
   duplicate_of: string | null;
+  /** Public comments; missing from PMO versions before comments. */
+  comment_count?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface PmoComment {
+  id: string;
+  body: string;
+  author: { kind: string; name: string | null };
+  created_at: string;
 }
 
 /** PMO answered with an error, or could not be reached (`status` 0). */
@@ -71,6 +80,16 @@ export class Pmo {
       'GET',
       `/v1/projects/${this.opts.project}/issues?${params}`,
     );
+  }
+
+  /** Public comments on an issue, oldest first (PMO never shows apps internal ones). */
+  listComments(issueKey: string) {
+    return this.call<PmoComment[]>('GET', `/v1/issues/${issueKey}/comments`);
+  }
+
+  /** The project's issue key format, e.g. DM-12. */
+  isIssueKey(key: string): boolean {
+    return new RegExp(`^${this.opts.project}-[1-9][0-9]{0,8}$`).test(key);
   }
 
   /** Reports an issue for a member; PMO e-mails them a personal key the first time. */

@@ -57,6 +57,7 @@ describe('reports', () => {
       platform: 'web',
       private: false,
       duplicate_of: null,
+      comment_count: 0,
       created_at: expect.any(String),
       updated_at: expect.any(String),
       attachments: 2,
@@ -135,6 +136,45 @@ describe('reports', () => {
       '/v1/projects/DM/issues?limit=30&offset=0&status=open',
       '/v1/projects/DM/issues?limit=30&offset=0',
       '/v1/projects/DM/issues?limit=5&offset=0&q=mapa',
+    ]);
+  });
+
+  it('shows the comments on a report', async () => {
+    const ola = await login(h.app, 'ola@gmail.com');
+    await report(h.app, ola, { type: 'bug', title: 'Ciemna mapa' });
+    pmo.issues[0]!.comment_count = 1;
+    pmo.comments['DM-1'] = [
+      {
+        id: 'c1',
+        body: 'Mapa nie ma jeszcze ciemnego stylu.',
+        author: { kind: 'user', name: 'Mateusz' },
+        created_at: '2026-10-18T10:00:00Z',
+      },
+    ];
+
+    const list = await h.app.inject({ method: 'GET', url: '/reports', headers: ola.headers });
+    expect(list.json().items[0].comment_count).toBe(1);
+    const res = await h.app.inject({ method: 'GET', url: '/reports/dm-1/comments', headers: ola.headers });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      items: [
+        {
+          id: 'c1',
+          body: 'Mapa nie ma jeszcze ciemnego stylu.',
+          author: 'Mateusz',
+          created_at: '2026-10-18T10:00:00Z',
+        },
+      ],
+    });
+
+    // Only this project's reports, and only existing ones.
+    for (const url of ['/reports/XX-1/comments', '/reports/DM-99/comments', '/reports/..%2Fadmin/comments']) {
+      const missing = await h.app.inject({ method: 'GET', url, headers: ola.headers });
+      expect(missing.statusCode, url).toBe(404);
+    }
+    expect(pmo.requests.filter((r) => r.url.includes('/comments')).map((r) => r.url)).toEqual([
+      '/v1/issues/DM-1/comments',
+      '/v1/issues/DM-99/comments',
     ]);
   });
 

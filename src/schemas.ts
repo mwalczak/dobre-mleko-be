@@ -516,10 +516,22 @@ export const Report = z
     platform: z.string().nullable().meta({ description: 'An id from `platforms` in GET /reports/options' }),
     private: z.boolean().meta({ description: 'Only the admins and the reporter see it (abuse reports)' }),
     duplicate_of: z.string().nullable().meta({ description: 'Key of the original report, when a duplicate' }),
+    comment_count: z.number().int().default(0).meta({ description: 'Comments to show (GET /reports/{key}/comments)' }),
     created_at: isoDate,
     updated_at: isoDate,
   })
   .meta({ id: 'Report', description: 'A bug report, idea or abuse report, as tracked in PMO.' });
+
+export const ReportComment = z
+  .object({
+    id: z.string(),
+    body: z.string(),
+    author: z.string().nullable().meta({ description: 'Who wrote it, e.g. an admin; null if unknown' }),
+    created_at: isoDate,
+  })
+  .meta({ id: 'ReportComment', description: 'A comment on a report, e.g. why it won’t be fixed.' });
+
+export const ReportCommentList = z.object({ items: z.array(ReportComment) }).meta({ id: 'ReportCommentList' });
 
 export const CreatedReport = Report.extend({
   attachments: z.number().int().meta({ description: 'Files attached' }),

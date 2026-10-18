@@ -6,9 +6,9 @@ import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import type { App, Ctx } from '../app.js';
-import { HttpError, invalidInput } from '../errors.js';
+import { HttpError, invalidInput, notFound } from '../errors.js';
 import { PmoError } from '../pmo.js';
-import { CreatedReport, Report, ReportList, ReportOptions } from '../schemas.js';
+import { CreatedReport, ReportCommentList, ReportList, ReportOptions } from '../schemas.js';
 
 /** Attachments per report, and the size of each (nginx in dobre-mleko-web allows the sum). */
 export const MAX_REPORT_FILES = 3;
@@ -34,6 +34,7 @@ export function reportRoutes(app: App, ctx: Ctx) {
     } catch (error) {
       if (!(error instanceof PmoError)) throw error;
       if (error.status === 400) throw invalidInput(error.message);
+      if (error.status === 404) throw notFound('Report');
       app.log.error({ err: error }, 'PMO request failed');
       throw unavailable();
     }
@@ -90,7 +91,34 @@ export function reportRoutes(app: App, ctx: Ctx) {
       );
       // Only what members can report: other types (e.g. the admins' todos) are internal.
       const offered = new Set(options.issue_types.map((t) => t.id));
-      return { items: page.items.filter((i) => offered.has(i.type)), next_offset: page.next_offset };
+      const items = page.items
+        .filter((i) => offered.has(i.type))
+        .map((i) => ({ ...i, comment_count: i.comment_count ?? 0 }));
+      return { items, next_offset: page.next_offset };
+    },
+  );
+
+  app.get(
+    '/reports/:key/comments',
+    {
+      preHandler: ctx.auth,
+      schema: {
+        tags: ['Reports'],
+        summary: 'Comments on a report',
+        description:
+          'Comments from the admins (or others) on a report, oldest first, e.g. why it won’t be fixed. ' +
+          '`comment_count` on a report says whether there are any.',
+        params: z.object({ key: z.string().meta({ example: 'DM-12' }) }),
+        response: { 200: ReportCommentList },
+      },
+    },
+    async (req) => {
+      const key = req.params.key.toUpperCase();
+      if (!pmo.isIssueKey(key)) throw notFound('Report');
+      const comments = await viaPmo(() => pmo.listComments(key));
+      return {
+        items: comments.map((c) => ({ id: c.id, body: c.body, author: c.author.name, created_at: c.created_at })),
+      };
     },
   );
 
@@ -171,7 +199,12 @@ export function reportRoutes(app: App, ctx: Ctx) {
             failed.push(file.filename);
           }
         }
-        return reply.status(201).send({ ...issue, attachments: files.length - failed.length, failed_files: failed });
+        return reply.status(201).send({
+          ...issue,
+          comment_count: issue.comment_count ?? 0,
+          attachments: files.length - failed.length,
+          failed_files: failed,
+        });
       } catch (error) {
         const e = error as { code?: string };
         if (e.code === 'FST_FILES_LIMIT') throw invalidInput(`At most ${MAX_REPORT_FILES} files`);

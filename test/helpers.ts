@@ -91,6 +91,10 @@ const fakeMapsFetch: typeof fetch = async (input) => {
 export class FakePmo {
   issues: Record<string, unknown>[] = [];
   attachments: { issue: string; filename: string; type: string; size: number }[] = [];
+  comments: Record<
+    string,
+    { id: string; body: string; author: { kind: string; name: string | null }; created_at: string }[]
+  > = {};
   requests: { method: string; url: string; authorization: string | null; body: Record<string, unknown> | null }[] = [];
   status: number | null = null;
   options = {
@@ -109,6 +113,7 @@ export class FakePmo {
   reset() {
     this.issues = [];
     this.attachments = [];
+    this.comments = {};
     this.requests = [];
     this.status = null;
   }
@@ -127,6 +132,13 @@ export class FakePmo {
     if (this.status)
       return Response.json({ error: 'x', message: `fake PMO error ${this.status}` }, { status: this.status });
     if (url.pathname === '/v1/projects/DM') return Response.json({ key: 'DM', ...this.options });
+    const comments = url.pathname.match(/^\/v1\/issues\/(DM-\d+)\/comments$/);
+    if (comments) {
+      if (!this.issues.some((i) => i.key === comments[1])) {
+        return Response.json({ error: 'not_found', message: 'issue not found' }, { status: 404 });
+      }
+      return Response.json(this.comments[comments[1]!] ?? []);
+    }
     const attachment = url.pathname.match(/^\/v1\/issues\/(DM-\d+)\/attachments$/);
     if (attachment && form) {
       const file = form.get('file') as File;
@@ -155,6 +167,7 @@ export class FakePmo {
         milestone: null,
         duplicate_of: null,
         source_app: 'dobre-mleko.app',
+        comment_count: 0,
         created_at: new Date(Date.UTC(2026, 9, 11, 12, n)).toISOString(),
         updated_at: new Date(Date.UTC(2026, 9, 11, 12, n)).toISOString(),
       };
