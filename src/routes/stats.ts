@@ -5,6 +5,7 @@ import { queryPlaces, toPlaceSummary } from '../places-query.js';
 import { toProfile, type ProfileJson } from '../profiles.js';
 import { MyStats, NetworkStats } from '../schemas.js';
 import { starsLeft } from './me.js';
+import { roundMatch, taste, TASTE_DESCRIPTION } from '../taste.js';
 
 /** Overall ratings rounded to whole stars, 1–5. */
 function distribution(rows: { stars: number; n: number }[]) {
@@ -85,9 +86,7 @@ export function statsRoutes(app: App, ctx: Ctx) {
       schema: {
         tags: ['Stats'],
         summary: 'My stats',
-        description:
-          'taste_match = Pearson correlation of overall ratings on places both rated (at least 3), mapped to 0–1 ' +
-          'as (r + 1) / 2; with no variation it is 1 when the ratings are identical, else 0.5.',
+        description: TASTE_DESCRIPTION,
         response: { 200: MyStats },
       },
     },
@@ -123,22 +122,11 @@ export function statsRoutes(app: App, ctx: Ctx) {
           select p.category, count(*)::int as n from ratings r join places p on p.id = r.place_id
           where r.user_id = ${me} group by p.category order by n desc, p.category
         `,
-        sql<{ profile: ProfileJson; match: number }[]>`
-          with mine as (
-            select place_id, overall::float8 as overall from ratings where user_id = ${me}
-          ), pairs as (
-            select r.user_id, count(*) as n, corr(m.overall, r.overall::float8) as r, bool_and(m.overall = r.overall) as same
-            from ratings r join mine m using (place_id)
-            where r.user_id <> ${me}
-            group by r.user_id
-            having count(*) >= 3
-          )
-          select profile_json(u) as profile,
-                 case when pairs.r is null then (case when same then 1.0 else 0.5 end) else (pairs.r + 1) / 2 end
-                   ::float8 as match
-          from pairs join users u on u.id = pairs.user_id
-          where u.status <> 'deleted'
-          order by match desc, pairs.n desc, u.id
+        sql<{ profile: ProfileJson; match: number; shared: number }[]>`
+          select profile_json(u) as profile, t.match, t.shared
+          from (${taste(sql, me)}) t join users u on u.id = t.user_id
+          where u.status <> 'deleted' and t.match is not null
+          order by t.match desc, t.shared desc, u.id
           limit 3
         `,
         queryPlaces(sql, {
@@ -160,7 +148,8 @@ export function statsRoutes(app: App, ctx: Ctx) {
         categories: categories.map((c) => ({ category_id: c.category, count: c.n })),
         taste_matches: matches.map((m) => ({
           profile: toProfile(m.profile, ctx.urls),
-          match: Math.round(m.match * 1000) / 1000,
+          match: roundMatch(m.match)!,
+          shared: m.shared,
         })),
         my_places_with_stars: starred.map((r) => ({ place: toPlaceSummary(r, v), stars: r.gold_star_count })),
         comments: s!.comments,

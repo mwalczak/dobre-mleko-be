@@ -258,7 +258,13 @@ export const MyStats = z
       .meta({ description: 'My overall ratings rounded to whole stars' }),
     categories: z.array(CategoryCount).meta({ description: 'Places I rated, per category, most first' }),
     taste_matches: z
-      .array(z.object({ profile: Profile, match: z.number() }))
+      .array(
+        z.object({
+          profile: Profile,
+          match: z.number(),
+          shared: z.number().int().meta({ description: 'Places rated by both' }),
+        }),
+      )
       .meta({ description: 'Top 3 members by taste match (0–1), from at least 3 places rated by both' }),
     my_places_with_stars: z
       .array(z.object({ place: PlaceSummary, stars: z.number().int() }))
@@ -548,3 +554,19 @@ export const ReportList = z
       .meta({ description: 'Pass as `offset` for the next page; null at the end' }),
   })
   .meta({ id: 'ReportList' });
+
+export const MemberSummary = z
+  .object({
+    profile: Profile,
+    places_added: z.number().int(),
+    ratings: z.number().int(),
+    wishlist_to_visit: z.number().int().meta({ description: 'Wishlist items not yet visited' }),
+    last_active_at: isoDate.meta({ description: 'Latest place, rating, comment or wishlist item (else joining)' }),
+    match: z.number().nullable().meta({ description: 'Taste match with me (0–1); null for me and below 3 shared' }),
+    shared: z.number().int().nullable().meta({ description: 'Places rated by both; null for me' }),
+  })
+  .meta({ id: 'MemberSummary', description: 'A row of the people list.' });
+
+export const MemberList = z
+  .object({ items: z.array(MemberSummary), total: z.number().int() })
+  .meta({ id: 'MemberList' });

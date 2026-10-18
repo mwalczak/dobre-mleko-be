@@ -140,6 +140,7 @@ and `cursor` and return `{ items, next_cursor, total }`. Errors are `{"error": "
 | Wishlist | `GET\|POST /me/wishlist`, `PATCH\|DELETE /me/wishlist/{id}`, `GET /wishlist/{id}`, `GET /members/{id}/wishlist`, `GET /wishlist?bbox=` (map layer) |
 | Comments | `GET\|POST /places/{id}/comments`, `PATCH\|DELETE /comments/{id}` |
 | Photos | `POST /photos` (upload), `DELETE /photos/{id}`, `GET /files/{hash}[/thumb]?exp&sig` (signed) |
+| Members | `GET /members` (everyone, with counts, last activity and taste match) |
 | Stats | `GET /stats/network`, `GET /stats/me` |
 | Meta | `GET /meta`: categories (`category_details`), rating criteria, limits, sign-in options |
 | Admin | `GET\|POST /admin/allowed`, `PATCH\|DELETE /admin/allowed/{email}`, `GET /admin/settings`, `PUT\|DELETE /admin/settings/{key}`, `GET\|POST /admin/categories`, `PATCH\|DELETE /admin/categories/{id}`, `PUT /admin/categories/order`, `GET\|POST /admin/icons`, `PATCH\|DELETE /admin/icons/{id}` |
@@ -170,6 +171,17 @@ was there; `my_visited_on` in the place, `visited_on` in `GET /me/ratings`, neve
 
 Every request re-checks the whitelist, the role and the account status, so removing someone, changing their role
 or suspending them applies to existing sessions immediately. Their content stays.
+
+### People and taste match
+
+`GET /members` lists everyone except deleted accounts, most recently active first (latest place, rating, comment
+or wishlist item), with places added, ratings, wishlist items still to visit and the taste match with me. The
+network is small, so the list is not paged.
+
+Taste match is `0.5 + (r / 2) · n / (n + 5)`: `r` is the Pearson correlation of overall ratings on the `n` places
+both rated. With few shared places it stays near 50% (3 identical ratings give 69%, 20 give 90%), so a couple of
+lucky agreements do not top the list. `shared` is `n`; below 3 shared places `match` is null. `GET /stats/me`
+returns the top 3 the same way.
 
 ### Categories
 
