@@ -12,14 +12,10 @@ export const ratingBody = z.object({
   offer: score,
   service: score.nullable().default(null),
   value: score.nullable().default(null),
-  visited_on: z.iso
-    .date()
-    .nullable()
-    .optional()
-    .meta({
-      description:
-        'When I was there: YYYY-MM-DD, from `oldest_visit_date` in /meta (a year ago) to today; null clears it, left out keeps it',
-    }),
+  visited_on: z.iso.date().nullable().optional().meta({
+    description:
+      'When I was there: YYYY-MM-DD, from `oldest_visit_date` in /meta (a year ago) to today; null clears it, left out keeps it',
+  }),
   photo_ids: z
     .array(z.uuid())
     .default([])
