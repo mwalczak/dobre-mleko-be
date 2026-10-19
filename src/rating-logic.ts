@@ -16,7 +16,10 @@ export const ratingBody = z.object({
     .date()
     .nullable()
     .optional()
-    .meta({ description: 'When I was there: YYYY-MM-DD, not in the future; null clears it, left out keeps it' }),
+    .meta({
+      description:
+        'When I was there: YYYY-MM-DD, from `oldest_visit_date` in /meta (a year ago) to today; null clears it, left out keeps it',
+    }),
   photo_ids: z
     .array(z.uuid())
     .default([])

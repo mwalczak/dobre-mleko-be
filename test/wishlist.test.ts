@@ -72,6 +72,8 @@ describe('wishlist', () => {
     await add(kuba, zamek);
 
     expect((await patch(kuba, id, { visited_on: '2026-10-12' })).statusCode).toBe(422); // clock: 2026-10-11
+    expect((await patch(kuba, id, { visited_on: '2025-10-10' })).statusCode).toBe(422); // more than a year ago
+    expect((await patch(kuba, id, { visited_on: '2025-10-11' })).statusCode).toBe(200);
     const visited = await patch(kuba, id, { visited_on: '2026-10-10' });
     expect(visited.json()).toMatchObject({ visited_on: '2026-10-10', name: jachta.name });
     expect(visited.json().updated_at).not.toBeNull();

@@ -60,6 +60,12 @@ export function localDate(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
+/** The oldest visit date accepted: the same day a year ago (29 February → 28 February), as YYYY-MM-DD. */
+export function oldestVisitDate(date: Date, timeZone: string): string {
+  const [year, month, day] = localDate(date, timeZone).split('-');
+  return `${Number(year) - 1}-${month}-${month === '02' && day === '29' ? '28' : day}`;
+}
+
 /** First day of the current month in the given time zone, as YYYY-MM-DD. Stars are counted per such month. */
 export function monthStart(date: Date, timeZone: string): string {
   const { year, month } = zonedParts(date, timeZone);

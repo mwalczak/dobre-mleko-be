@@ -62,6 +62,7 @@ describe('adding places', () => {
         payload: { ...pawilon, rating: { vibe: 5, offer: 4, visited_on }, photo_ids: [await photoId(h.app, kuba)] },
       });
     expect((await add('2026-10-12')).statusCode).toBe(422); // clock: 2026-10-11
+    expect((await add('2025-10-10')).statusCode).toBe(422); // more than a year ago
     const res = await add('2026-10-04');
     expect(res.statusCode).toBe(201);
     expect(res.json().my_visited_on).toBe('2026-10-04');

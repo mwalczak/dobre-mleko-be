@@ -319,6 +319,9 @@ export const Meta = z
     max_photo_bytes: z.number().int(),
     max_photos_per_rating: z.number().int(),
     time_zone: z.string(),
+    oldest_visit_date: z.iso
+      .date()
+      .meta({ description: 'Visit dates (`visited_on`) can be from this day (a year ago, in time_zone) to today' }),
     google_web_client_id: z
       .string()
       .nullable()

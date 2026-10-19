@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { App, Ctx } from '../app.js';
-import { localDate } from '../domain.js';
+import { localDate, oldestVisitDate } from '../domain.js';
 import { invalidInput, notAuthorized, notFound } from '../errors.js';
 import { decodeCursor, page, pagingQuery } from '../paging.js';
 import { toProfile, type ProfileJson } from '../profiles.js';
@@ -89,10 +89,12 @@ const visitedFilter = z
   .meta({ description: 'Only visited (`true`) or only not yet visited (`false`); both when left out' })
   .transform((v) => (v == null ? undefined : v === 'true'));
 
-/** Rejects visit dates in the future (in the network's time zone). */
+/** Rejects visit dates in the future or more than a year ago (in the network's time zone). */
 export function checkVisitedOn(ctx: Ctx, date: string | null | undefined) {
-  if (date && date > localDate(ctx.now(), ctx.config.TIME_ZONE)) {
-    throw invalidInput('visited_on cannot be in the future');
+  if (!date) return;
+  if (date > localDate(ctx.now(), ctx.config.TIME_ZONE)) throw invalidInput('visited_on cannot be in the future');
+  if (date < oldestVisitDate(ctx.now(), ctx.config.TIME_ZONE)) {
+    throw invalidInput('visited_on can be at most a year ago');
   }
 }
 
@@ -280,7 +282,7 @@ export function wishlistRoutes(app: App, ctx: Ctx) {
         tags: ['Wishlist'],
         summary: 'Change my wishlist item',
         description:
-          'Only the fields given change. `visited_on` marks it visited (a date, not in the future) or not ' +
+          'Only the fields given change. `visited_on` marks it visited (a date, not in the future nor more than a year ago) or not ' +
           "(null); `place_id` links the regular place it was added as. 403 for someone else's item.",
         params: idParams,
         body: updateBody,
