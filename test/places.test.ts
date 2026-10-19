@@ -52,6 +52,21 @@ describe('adding places', () => {
     expect(place.cover_photo.id).toBe(photo);
   });
 
+  it('keeps the visit date given with the author’s rating, but not one in the future', async () => {
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const add = async (visited_on: string) =>
+      h.app.inject({
+        method: 'POST',
+        url: '/places',
+        headers: kuba.headers,
+        payload: { ...pawilon, rating: { vibe: 5, offer: 4, visited_on }, photo_ids: [await photoId(h.app, kuba)] },
+      });
+    expect((await add('2026-10-12')).statusCode).toBe(422); // clock: 2026-10-11
+    const res = await add('2026-10-04');
+    expect(res.statusCode).toBe(201);
+    expect(res.json().my_visited_on).toBe('2026-10-04');
+  });
+
   it('accepts every category, hotels included', async () => {
     const kuba = await login(h.app, 'kuba@gmail.com');
     await createPlace(h.app, kuba, {

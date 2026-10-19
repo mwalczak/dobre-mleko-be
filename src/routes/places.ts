@@ -14,6 +14,7 @@ import { toProfile, type ProfileJson } from '../profiles.js';
 import { attachRatingPhotos, awardGoldStar, ratingBody } from '../rating-logic.js';
 import { CardStyle, ErrorBody, PlaceDetail, PlaceList, SavedResult } from '../schemas.js';
 import { selectComments, toComment } from './comments.js';
+import { checkVisitedOn } from './wishlist.js';
 import { starsLeft } from './me.js';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'expected HH:MM');
@@ -305,6 +306,7 @@ export function placeRoutes(app: App, ctx: Ctx) {
     async (req, reply) => {
       const b = req.body;
       await requireActiveCategory(sql, b.category_id);
+      checkVisitedOn(ctx, b.rating.visited_on);
       const id = await sql.begin(async (tx) => {
         if (b.google_place_id) {
           const [existing] = await tx<
@@ -328,8 +330,8 @@ export function placeRoutes(app: App, ctx: Ctx) {
         const placeId = created!.id;
         const r = b.rating;
         await tx`
-          insert into ratings (user_id, place_id, vibe, offer, service, value)
-          values (${req.user.id}, ${placeId}, ${r.vibe}, ${r.offer}, ${r.service}, ${r.value})
+          insert into ratings (user_id, place_id, vibe, offer, service, value, visited_on)
+          values (${req.user.id}, ${placeId}, ${r.vibe}, ${r.offer}, ${r.service}, ${r.value}, ${r.visited_on ?? null})
         `;
         await attachRatingPhotos(tx, ctx, placeId, req.user.id, b.photo_ids);
         if (b.gold_star) await awardGoldStar(tx, ctx, placeId, req.user.id);
