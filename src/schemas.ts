@@ -570,6 +570,21 @@ export const MemberSummary = z
   })
   .meta({ id: 'MemberSummary', description: 'A row of the people list.' });
 
+export const MemberRatingList = z
+  .object({
+    items: z.array(
+      z.object({
+        place: z.object({ id: z.uuid(), name: z.string(), category_id: category }),
+        scores: Scores,
+        overall: z.number(),
+        updated_at: isoDate,
+      }),
+    ),
+    next_cursor: nextCursor,
+    total: z.number().int(),
+  })
+  .meta({ id: 'MemberRatingList', description: "A member's ratings (their visit dates stay private)." });
+
 export const MemberList = z
   .object({ items: z.array(MemberSummary), total: z.number().int() })
   .meta({ id: 'MemberList' });

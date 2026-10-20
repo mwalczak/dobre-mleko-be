@@ -345,6 +345,31 @@ describe('stats', () => {
     expect(after.items.map((m: { profile: { id: string } }) => m.profile.id)).not.toContain(tomek.id);
   });
 
+  it('shows one member and their ratings, without visit dates', async () => {
+    const ola = await login(h.app, 'ola@gmail.com');
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const place = await createPlace(h.app, ola, pawilon, { vibe: 5, offer: 4 });
+    await rate(h.app, kuba, place, { vibe: 3, offer: 2, visited_on: '2026-10-05' });
+
+    // Kuba added no place: still a member to show.
+    const one = await h.app.inject({ method: 'GET', url: `/members/${kuba.id}`, headers: ola.headers });
+    expect(one.statusCode).toBe(200);
+    expect(one.json()).toMatchObject({ profile: { id: kuba.id }, places_added: 0, ratings: 1, shared: 1 });
+
+    const ratings = await h.app.inject({ method: 'GET', url: `/members/${kuba.id}/ratings`, headers: ola.headers });
+    expect(ratings.statusCode).toBe(200);
+    expect(ratings.json()).toMatchObject({
+      total: 1,
+      items: [{ place: { id: place, name: 'Pawilon Nocny' }, scores: { vibe: 3, offer: 2 }, overall: 2.5 }],
+    });
+    expect(ratings.json().items[0]).not.toHaveProperty('visited_on');
+
+    const missing = '00000000-0000-4000-8000-000000000000';
+    for (const url of [`/members/${missing}`, `/members/${missing}/ratings`]) {
+      expect((await h.app.inject({ method: 'GET', url, headers: ola.headers })).statusCode).toBe(404);
+    }
+  });
+
   it('exposes categories, criteria and limits', async () => {
     const meta = (await h.app.inject({ method: 'GET', url: '/meta' })).json();
     expect(meta).toMatchObject({
