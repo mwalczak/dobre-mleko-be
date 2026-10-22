@@ -179,7 +179,7 @@ export async function loadPlace(ctx: Ctx, placeId: string, userId: string, near?
       }[]
     >`
       select id, hash, blurhash, width, height, uploaded_by from place_photos
-      where place_id = ${placeId} order by created_at, id
+      where place_id = ${placeId} order by position nulls last, created_at, id
     `,
     sql<Record<string, number | null>[]>`
       select avg(vibe)::numeric(3, 2) as vibe, avg(offer)::numeric(3, 2) as offer,

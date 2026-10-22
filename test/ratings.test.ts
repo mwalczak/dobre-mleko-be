@@ -196,3 +196,53 @@ describe('gold stars', () => {
     expect(res.json()).toMatchObject({ value: 0.5, integer: false });
   });
 });
+
+describe('photo order', () => {
+  const order = (who: Who, placeId: string, photo_ids: string[]) =>
+    h.app.inject({
+      method: 'PUT',
+      url: `/places/${placeId}/photos/order`,
+      headers: who.headers,
+      payload: { photo_ids },
+    });
+  const photosOf = async (who: Who, placeId: string) => {
+    const place = (await h.app.inject({ method: 'GET', url: `/places/${placeId}`, headers: who.headers })).json();
+    return { ids: place.photos.map((p: { id: string }) => p.id) as string[], cover: place.cover_photo?.id as string };
+  };
+
+  it('the author reorders all photos of the place; the first one becomes the cover', async () => {
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const ola = await login(h.app, 'ola@gmail.com');
+    const id = await createPlace(h.app, kuba, pawilon);
+    expect((await put(ola, id, { vibe: 4, offer: 4, photo_ids: [await photoId(h.app, ola)] })).statusCode).toBe(200);
+    const [first, second] = (await photosOf(kuba, id)).ids;
+
+    expect((await order(kuba, id, [second!, first!])).statusCode).toBe(204);
+    expect(await photosOf(ola, id)).toEqual({ ids: [second, first], cover: second });
+    const list = (await h.app.inject({ method: 'GET', url: '/places', headers: kuba.headers })).json();
+    expect(list.items.find((p: { id: string }) => p.id === id).cover_photo.id).toBe(second);
+
+    // Photos added later go to the end.
+    const later = await photoId(h.app, ola);
+    expect((await put(ola, id, { vibe: 4, offer: 4, photo_ids: [later] })).statusCode).toBe(200);
+    expect((await photosOf(kuba, id)).ids).toEqual([second, first, later]);
+  });
+
+  it('only the author or an admin, and only with every photo of the place exactly once', async () => {
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const ola = await login(h.app, 'ola@gmail.com');
+    const admin = await login(h.app, ADMIN);
+    const id = await createPlace(h.app, kuba, pawilon);
+    expect((await put(ola, id, { vibe: 4, offer: 4, photo_ids: [await photoId(h.app, ola)] })).statusCode).toBe(200);
+    const [first, second] = (await photosOf(kuba, id)).ids;
+
+    expect((await order(ola, id, [second!, first!])).statusCode).toBe(403);
+    expect((await order(admin, id, [second!, first!])).statusCode).toBe(204);
+    expect((await order(kuba, id, [first!])).statusCode).toBe(422);
+    expect((await order(kuba, id, [first!, first!])).statusCode).toBe(422);
+    const elsewhere = await createPlace(h.app, kuba, kreska);
+    const foreign = (await photosOf(kuba, elsewhere)).ids[0]!;
+    expect((await order(kuba, id, [first!, foreign])).statusCode).toBe(422);
+    expect((await photosOf(kuba, id)).ids).toEqual([second, first]);
+  });
+});

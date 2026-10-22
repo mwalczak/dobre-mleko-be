@@ -1,9 +1,10 @@
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { App, Ctx } from '../app.js';
-import { HttpError, notAuthorized, notFound } from '../errors.js';
+import { HttpError, invalidInput, notAuthorized, notFound } from '../errors.js';
 import type { FileVariant } from '../file-urls.js';
 import { fileInUse, lockHash, releaseFiles, THUMB_TYPE } from '../photo-store.js';
+import { placeAuthor, requireOwnerOrAdmin } from '../place-access.js';
 import { toPhoto } from '../places-query.js';
 import { PhotoFile } from '../schemas.js';
 import { readImageUpload, storeImage } from '../uploads.js';
@@ -78,6 +79,41 @@ export function photoRoutes(app: App, ctx: Ctx) {
         }
         await tx`delete from place_photos where id = ${req.params.id}`;
         await releaseFiles(tx, ctx.photos, [photo.hash]);
+      });
+      return reply.status(204).send();
+    },
+  );
+
+  app.put(
+    '/places/:id/photos/order',
+    {
+      preHandler: ctx.auth,
+      schema: {
+        tags: ['Photos'],
+        summary: 'Reorder the photos of a place',
+        description:
+          'The person who added the place, or an admin. `photo_ids` lists all photos of the place in the new order; ' +
+          'the first one is the cover. Photos attached later are added at the end.',
+        params: z.object({ id: z.uuid() }),
+        body: z.object({ photo_ids: z.array(z.uuid()).min(1) }),
+      },
+    },
+    async (req, reply) => {
+      requireOwnerOrAdmin(req.user, await placeAuthor(ctx, req.params.id), 'reorder these photos');
+      const ids = req.body.photo_ids;
+      await sql.begin(async (tx) => {
+        const photos = await tx<{ id: string }[]>`
+          select id from place_photos where place_id = ${req.params.id} for update
+        `;
+        const current = new Set(photos.map((p) => p.id));
+        if (new Set(ids).size !== ids.length || ids.length !== current.size || !ids.every((id) => current.has(id))) {
+          throw invalidInput('photo_ids must list every photo of this place exactly once');
+        }
+        await tx`
+          update place_photos set position = o.position
+          from unnest(${ids}::uuid[]) with ordinality as o(id, position)
+          where place_photos.id = o.id
+        `;
       });
       return reply.status(204).send();
     },

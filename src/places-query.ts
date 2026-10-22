@@ -138,7 +138,7 @@ export async function queryPlaces(sql: Sql, q: PlaceQuery): Promise<PlaceRow[]> 
     join users u on u.id = p.added_by
     left join lateral (
       select ph.id, ph.hash, ph.blurhash, ph.width, ph.height from place_photos ph
-      where ph.place_id = p.id order by ph.created_at, ph.id limit 1
+      where ph.place_id = p.id order by ph.position nulls last, ph.created_at, ph.id limit 1
     ) cover on true
     where true
       ${q.ids ? sql`and p.id = any(${q.ids}::uuid[])` : sql``}
