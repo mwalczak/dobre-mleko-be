@@ -135,7 +135,7 @@ describe('reports', () => {
     expect(pmo.requests.map((r) => r.url)).toEqual([
       '/v1/projects/DM/issues?limit=30&offset=0&status=open',
       '/v1/projects/DM/issues?limit=30&offset=0',
-      '/v1/projects/DM/issues?limit=5&offset=0&q=mapa',
+      '/v1/projects/DM/issues?limit=5&offset=0&q=mapa&milestone=all',
     ]);
   });
 

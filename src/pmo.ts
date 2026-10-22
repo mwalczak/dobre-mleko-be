@@ -75,7 +75,11 @@ export class Pmo {
   listIssues(query: { status?: string; q?: string; limit: number; offset: number }) {
     const params = new URLSearchParams({ limit: String(query.limit), offset: String(query.offset) });
     if (query.status) params.set('status', query.status);
-    if (query.q) params.set('q', query.q);
+    // PMO lists the open milestone's issues by default; a search looks through all, so older reports are found too.
+    if (query.q) {
+      params.set('q', query.q);
+      params.set('milestone', 'all');
+    }
     return this.call<{ items: PmoIssue[]; next_offset: number | null }>(
       'GET',
       `/v1/projects/${this.opts.project}/issues?${params}`,

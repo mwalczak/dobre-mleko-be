@@ -65,7 +65,7 @@ export function reportRoutes(app: App, ctx: Ctx) {
         tags: ['Reports'],
         summary: 'Reported issues',
         description:
-          'Bugs, ideas and abuse reports members have filed, newest first, so they can check before filing the same ' +
+          'Bugs, ideas and abuse reports members have filed in the current milestone (searches with `q` cover all), newest first, so they can check before filing the same ' +
           'thing again. Abuse reports are private and never listed, nor are types members cannot report (such as the ' +
           'admins’ todos), so a page may hold fewer than `limit`. `q` searches titles and descriptions, tolerating ' +
           'typos, and sorts by relevance. 503 `reports_unavailable` when the issue tracker cannot be reached.',
