@@ -226,6 +226,8 @@ export function setup(): Harness {
 
   beforeEach(async () => {
     h.clock.now = new Date('2026-10-11T12:00:00Z');
+    // Notifications from the previous test may still be querying: truncating under them can deadlock.
+    await h.app.settle();
     await h.sql`truncate users, places, place_photos, ratings, stars, comments, saved_places, allowed_emails, settings, categories, icons, push_log cascade`;
     pushes.sent = [];
     pushes.gone.clear();

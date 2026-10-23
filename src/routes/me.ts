@@ -4,6 +4,7 @@ import { view } from '../app.js';
 import { requireCategories } from '../categories.js';
 import { monthStart, type Category } from '../domain.js';
 import { notFound } from '../errors.js';
+import { notifyJoined, toNotificationPrefs, type NotifyColumns } from '../notifications.js';
 import { decodeCursor, page, pagingQuery } from '../paging.js';
 import { lockHash, releaseFiles } from '../photo-store.js';
 import { queryPlaces, toPlaceSummary } from '../places-query.js';
@@ -25,15 +26,14 @@ export async function goldStarQuota(ctx: Ctx, userId: string) {
 
 export async function loadMe(ctx: Ctx, userId: string) {
   const [user] = await ctx.sql<
-    {
+    ({
       profile: ProfileJson;
       email: string;
       profile_completed_at: Date | null;
-      notify_new_places: 'all' | 'favorites' | 'none';
-      notify_comments: boolean;
-    }[]
+    } & NotifyColumns)[]
   >`
-    select profile_json(u) as profile, u.email, u.profile_completed_at, u.notify_new_places, u.notify_comments
+    select profile_json(u) as profile, u.email, u.profile_completed_at, u.notify_new_places, u.notify_comments,
+      u.notify_gold_stars, u.notify_joins
     from users u where u.id = ${userId}
   `;
   if (!user) throw notFound('User');
@@ -43,7 +43,7 @@ export async function loadMe(ctx: Ctx, userId: string) {
     email: user.email,
     is_admin: profile.role === 'admin',
     has_profile: !!user.profile_completed_at,
-    notifications: { new_places: user.notify_new_places, comments: user.notify_comments },
+    notifications: toNotificationPrefs(user),
     gold_stars: await goldStarQuota(ctx, userId),
   };
 }
@@ -81,7 +81,8 @@ export function meRoutes(app: App, ctx: Ctx) {
         tags: ['Me'],
         summary: 'Finish onboarding',
         description:
-          'Sets the display name, badge (max 16 characters) and up to 3 favourite categories; `has_profile` becomes true.',
+          'Sets the display name, badge (max 16 characters) and up to 3 favourite categories; `has_profile` becomes ' +
+          'true. The first time, whoever put the e-mail on the list gets a push notification (`notifications.joins`).',
         body: z.object({
           display_name: displayName,
           badge: badge.default(null),
@@ -93,12 +94,16 @@ export function meRoutes(app: App, ctx: Ctx) {
     async (req) => {
       const b = req.body;
       await requireCategories(sql, b.favorite_categories);
+      const [before] = await sql<{ done: boolean }[]>`
+        select profile_completed_at is not null as done from users where id = ${req.user.id}
+      `;
       await sql`
         update users set
           name = ${b.display_name}, badge = ${b.badge}, favorite_categories = ${b.favorite_categories},
           profile_completed_at = coalesce(profile_completed_at, now())
         where id = ${req.user.id}
       `;
+      if (!before?.done) notifyJoined(ctx, req.user.id);
       return loadMe(ctx, req.user.id);
     },
   );
@@ -131,6 +136,8 @@ export function meRoutes(app: App, ctx: Ctx) {
       }
       if (b.notifications?.new_places !== undefined) set.notify_new_places = b.notifications.new_places;
       if (b.notifications?.comments !== undefined) set.notify_comments = b.notifications.comments;
+      if (b.notifications?.gold_stars !== undefined) set.notify_gold_stars = b.notifications.gold_stars;
+      if (b.notifications?.joins !== undefined) set.notify_joins = b.notifications.joins;
       if (Object.keys(set).length) await sql`update users set ${sql(set)} where id = ${req.user.id}`;
       return loadMe(ctx, req.user.id);
     },
@@ -159,7 +166,8 @@ export function meRoutes(app: App, ctx: Ctx) {
           update users set
             status = 'deleted', name = ${DELETED_NAME}, email = ${`deleted-${req.user.id}@deleted.invalid`},
             google_sub = null, apple_sub = null, avatar_hash = null, avatar_url = null, badge = null,
-            favorite_categories = '{}', notify_new_places = 'none', notify_comments = false
+            favorite_categories = '{}', notify_new_places = 'none', notify_comments = false,
+            notify_gold_stars = false, notify_joins = false
           where id = ${req.user.id}
         `;
         await tx`delete from saved_places where user_id = ${req.user.id}`;

@@ -2,8 +2,9 @@ import { z } from 'zod';
 import type { App, Ctx } from '../app.js';
 import { requireCategories } from '../categories.js';
 import { invalidInput } from '../errors.js';
-import { sendAdminMessage, type Audience } from '../notifications.js';
+import { sendAdminMessage, toNotificationPrefs, type Audience, type NotifyColumns } from '../notifications.js';
 import { toProfile, type ProfileJson } from '../profiles.js';
+import type { PushKind } from '../push.js';
 import { PushCounts, PushLog, PushOverview } from '../schemas.js';
 
 const token = z.string().trim().min(16).max(512);
@@ -101,15 +102,14 @@ export function pushRoutes(app: App, ctx: Ctx) {
     },
     async () => {
       const members = await sql<
-        {
+        ({
           id: string;
           profile: ProfileJson;
           email: string;
-          notify_new_places: 'all' | 'favorites' | 'none';
-          notify_comments: boolean;
-        }[]
+        } & NotifyColumns)[]
       >`
-        select u.id, profile_json(u) as profile, u.email, u.notify_new_places, u.notify_comments
+        select u.id, profile_json(u) as profile, u.email, u.notify_new_places, u.notify_comments,
+          u.notify_gold_stars, u.notify_joins
         from users u where u.status = 'active'
         order by lower(u.name)
       `;
@@ -122,7 +122,7 @@ export function pushRoutes(app: App, ctx: Ctx) {
         members: members.map((m) => ({
           profile: toProfile(m.profile, ctx.urls),
           email: m.email,
-          notifications: { new_places: m.notify_new_places, comments: m.notify_comments },
+          notifications: toNotificationPrefs(m),
           devices: devices
             .filter((d) => d.user_id === m.id)
             .map(({ user_id: _, created_at, last_seen_at, ...d }) => ({
@@ -188,7 +188,7 @@ export function pushRoutes(app: App, ctx: Ctx) {
         {
           id: string;
           created_at: Date;
-          kind: 'new_place' | 'new_comment' | 'admin';
+          kind: PushKind;
           title: string;
           body: string;
           place_id: string | null;

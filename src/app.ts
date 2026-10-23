@@ -259,5 +259,6 @@ export async function buildApp(deps: AppDeps) {
     routes(app, ctx);
   }
 
-  return app;
+  // `settle`: waits for the notifications still being sent after their responses (tests, before cleaning up).
+  return Object.assign(app, { settle: () => ctx.notifier.settle() });
 }

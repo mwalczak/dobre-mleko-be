@@ -215,10 +215,15 @@ The apps register their device token with `PUT /me/devices` (token, platform, AP
 development-signed builds, `production` for TestFlight and the App Store — and the bundle id, the APNs topic) and
 remove it with `DELETE /me/devices/{token}` on sign-out. People choose what they get in `PATCH /me`
 (`notifications`): new places — `all`, `favorites` (only in their favourite categories; the default) or `none` —
-and comments (on places they added, commented on or saved; on by default).
+comments (on places they added, commented on or saved), gold stars and joins (`gold_stars`, `joins`; all three
+on by default).
 
 - **New place:** to people with its category among their favourites, or who want all new places; not its author.
 - **New comment:** to the place's author, others who commented on it and those who saved it; not the commenter.
+- **Gold star:** to the place's author, unless they gave it themselves; opens the place.
+- **Someone joined:** when a person finishes onboarding (`POST /me/profile`, the first time), to whoever put
+  their e-mail on the list (`allowed_emails.added_by`, in practice an admin) — the stand-in for "my invite was
+  used" while invites are not in the MVP.
 - **Admins** (`/admin/push`): who gets notifications on which devices, a message to everyone, to chosen people
   or by favourite category (optionally opening a place), and the log of everything sent (`/admin/push/log`).
 

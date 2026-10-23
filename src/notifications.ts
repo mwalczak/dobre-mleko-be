@@ -7,6 +7,21 @@ export type Audience =
   | { kind: 'users'; user_ids: string[] }
   | { kind: 'categories'; categories: string[] };
 
+/** The notification settings on `users`. */
+export interface NotifyColumns {
+  notify_new_places: 'all' | 'favorites' | 'none';
+  notify_comments: boolean;
+  notify_gold_stars: boolean;
+  notify_joins: boolean;
+}
+
+export const toNotificationPrefs = (u: NotifyColumns) => ({
+  new_places: u.notify_new_places,
+  comments: u.notify_comments,
+  gold_stars: u.notify_gold_stars,
+  joins: u.notify_joins,
+});
+
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
 /**
@@ -62,6 +77,46 @@ export function notifyComment(ctx: Ctx, placeId: string, commenterId: string, bo
       rows.map((r) => r.id),
       { title: clip(`${place.commenter} o: ${place.name}`, 120), body: clip(body, 160), placeId },
       { kind: 'new_comment' },
+    );
+  });
+}
+
+/** A gold star: to the place's author, unless it is their own star or they turned these off. */
+export function notifyGoldStar(ctx: Ctx, placeId: string, giverId: string): void {
+  ctx.notifier.background(async () => {
+    const [row] = await ctx.sql<{ author: string; name: string; giver: string }[]>`
+      select p.added_by as author, p.name, g.name as giver
+      from places p join users a on a.id = p.added_by, users g
+      where p.id = ${placeId} and g.id = ${giverId}
+        and a.id <> g.id and a.status = 'active' and a.notify_gold_stars
+    `;
+    if (!row) return;
+    await ctx.notifier.deliver(
+      'gold_star',
+      [row.author],
+      { title: clip(`Złota Gwiazdka dla: ${row.name}`, 120), body: `${row.giver} wyróżnia Twoje miejsce`, placeId },
+      { kind: 'gold_star' },
+    );
+  });
+}
+
+/**
+ * Someone joined (finished onboarding): to whoever put their e-mail on the list — the closest thing to "my invite
+ * was used" while invites are not in the MVP.
+ */
+export function notifyJoined(ctx: Ctx, userId: string): void {
+  ctx.notifier.background(async () => {
+    const [row] = await ctx.sql<{ inviter: string; name: string; email: string }[]>`
+      select i.id as inviter, u.name, u.email
+      from users u join allowed_emails a on a.email = u.email join users i on i.id = a.added_by
+      where u.id = ${userId} and i.id <> u.id and i.status = 'active' and i.notify_joins
+    `;
+    if (!row) return;
+    await ctx.notifier.deliver(
+      'member_joined',
+      [row.inviter],
+      { title: clip(`${row.name} dołącza do Dobrego Mleka`, 120), body: clip(`${row.email} — z Twojej listy`, 160) },
+      { kind: 'member_joined' },
     );
   });
 }

@@ -3,6 +3,7 @@ import type { App, Ctx } from '../app.js';
 import { monthStart } from '../domain.js';
 import { HttpError, notFound } from '../errors.js';
 import { releaseFiles } from '../photo-store.js';
+import { notifyGoldStar } from '../notifications.js';
 import { placeAuthor } from '../place-access.js';
 import { attachRatingPhotos, awardGoldStar, ratingBody } from '../rating-logic.js';
 import { GoldStarResult, PlaceDetail } from '../schemas.js';
@@ -92,7 +93,8 @@ export function ratingRoutes(app: App, ctx: Ctx) {
         description:
           '"Musisz tam iść". Does not change the displayed average but adds to rank_score. `gold_stars_per_month` ' +
           '(see /meta) per person per calendar month (Europe/Warsaw), once per place per month. 409 ' +
-          '`no_gold_stars_left`, `gold_star_already_awarded`.',
+          "`no_gold_stars_left`, `gold_star_already_awarded`. The place's author gets a push notification " +
+          '(`notifications.gold_stars`).',
         params: idParams,
         response: { 200: GoldStarResult },
       },
@@ -100,6 +102,7 @@ export function ratingRoutes(app: App, ctx: Ctx) {
     async (req) => {
       await placeAuthor(ctx, req.params.id);
       await sql.begin((tx) => awardGoldStar(tx, ctx, req.params.id, req.user.id));
+      notifyGoldStar(ctx, req.params.id, req.user.id);
       const month = monthStart(ctx.now(), config.TIME_ZONE);
       return { awarded: true, gold_stars_left: await starsLeft(ctx, req.user.id, month) };
     },

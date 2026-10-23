@@ -61,9 +61,10 @@ describe('devices and settings', () => {
 
   it('keeps notification preferences on the profile', async () => {
     const ola = await login(h.app, 'ola@gmail.com');
-    expect((await call('GET', '/me', ola)).json().notifications).toEqual({ new_places: 'favorites', comments: true });
-    const res = await call('PATCH', '/me', ola, { notifications: { new_places: 'all' } });
-    expect(res.json().notifications).toEqual({ new_places: 'all', comments: true });
+    const defaults = { new_places: 'favorites', comments: true, gold_stars: true, joins: true };
+    expect((await call('GET', '/me', ola)).json().notifications).toEqual(defaults);
+    const res = await call('PATCH', '/me', ola, { notifications: { new_places: 'all', gold_stars: false } });
+    expect(res.json().notifications).toEqual({ ...defaults, new_places: 'all', gold_stars: false });
     expect((await call('PATCH', '/me', ola, { notifications: { new_places: 'some' } })).statusCode).toBe(422);
   });
 });
@@ -124,6 +125,52 @@ describe('event notifications', () => {
     await logged(4);
     expect(sentTo()).toEqual(['admin', 'tomek']);
   });
+
+  it("tells the place's author about a gold star, not about their own", async () => {
+    const ola = await login(h.app, 'ola@gmail.com');
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    await register(ola, 'ola');
+    await register(kuba, 'kuba');
+    const id = await createPlace(h.app, ola, podPionem);
+    await logged(1);
+    pushes.sent = [];
+
+    expect((await call('POST', `/places/${id}/gold-star`, kuba)).statusCode).toBe(200);
+    await logged(2);
+    expect(sentTo()).toEqual(['ola']);
+    expect(pushes.sent[0]).toMatchObject({ title: 'Złota Gwiazdka dla: Bar Pod Pionem', placeId: id });
+    const [log] = await h.sql`select kind from push_log order by created_at desc limit 1`;
+    expect(log!.kind).toBe('gold_star');
+
+    pushes.sent = [];
+    expect((await call('POST', `/places/${id}/gold-star`, ola)).statusCode).toBe(200);
+    await call('PATCH', '/me', ola, { notifications: { gold_stars: false } });
+    await call('DELETE', `/places/${id}/gold-star`, kuba);
+    await call('POST', `/places/${id}/gold-star`, kuba);
+    await h.app.settle();
+    expect(pushes.sent).toEqual([]);
+  });
+
+  it('tells whoever put the e-mail on the list that the person joined, once', async () => {
+    const admin = await login(h.app, ADMIN);
+    await register(admin, 'admin');
+    await call('POST', '/admin/allowed', admin, { email: 'nowa@gmail.com' });
+    const nowa = await login(h.app, 'nowa@gmail.com');
+    const profile = { display_name: 'Nowa', favorite_categories: [] };
+    expect((await call('POST', '/me/profile', nowa, profile)).statusCode).toBe(200);
+    await logged(1);
+    expect(sentTo()).toEqual(['admin']);
+    expect(pushes.sent[0]).toMatchObject({ title: 'Nowa dołącza do Dobrego Mleka' });
+    expect(pushes.sent[0]!.body).toContain('nowa@gmail.com');
+
+    pushes.sent = [];
+    await call('POST', '/me/profile', nowa, { ...profile, display_name: 'Nowa Druga' });
+    // On the list without anyone adding them (here: by the test setup) — nobody to tell.
+    const ola = await login(h.app, 'ola@gmail.com');
+    await call('POST', '/me/profile', ola, { display_name: 'Ola' });
+    await h.app.settle();
+    expect(pushes.sent).toEqual([]);
+  });
 });
 
 describe('admin push panel', () => {
@@ -142,7 +189,7 @@ describe('admin push panel', () => {
     expect(res.configured).toBe(true);
     const olaRow = res.members.find((m: { email: string }) => m.email === 'ola@gmail.com');
     expect(olaRow).toMatchObject({
-      notifications: { new_places: 'favorites', comments: true },
+      notifications: { new_places: 'favorites', comments: true, gold_stars: true, joins: true },
       devices: [{ platform: 'ios', environment: 'sandbox', app_id: 'pl.dobremleko.app' }],
     });
     expect(res.members.find((m: { email: string }) => m.email === ADMIN).devices).toEqual([]);

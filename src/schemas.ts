@@ -46,6 +46,10 @@ export const NotificationPrefs = z
       description: 'New places: all of them, only in my favourite categories (default), or none',
     }),
     comments: z.boolean().meta({ description: 'Comments on places I added, commented on or saved' }),
+    gold_stars: z.boolean().meta({ description: 'Someone gave a place I added a gold star' }),
+    joins: z.boolean().meta({
+      description: 'Someone whose e-mail I put on the list joined (finished onboarding) — in practice, for admins',
+    }),
   })
   .meta({ id: 'NotificationPrefs', description: 'What push notifications I get.' });
 
@@ -431,7 +435,7 @@ export const PushOverview = z
 export const PushLogEntry = PushCounts.extend({
   id: z.uuid(),
   created_at: isoDate,
-  kind: z.enum(['new_place', 'new_comment', 'admin']),
+  kind: z.enum(['new_place', 'new_comment', 'gold_star', 'member_joined', 'admin']),
   title: z.string(),
   body: z.string(),
   place_id: z.uuid().nullable(),
