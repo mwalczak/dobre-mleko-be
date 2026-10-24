@@ -93,6 +93,7 @@ Environment variables (see `.env.example`):
 | `PHOTO_DIR` | `./data/photos` | Where photo files are stored (a volume in production) |
 | `TIME_ZONE` | `Europe/Warsaw` | Month boundaries for gold stars, weeks in stats, "open now" |
 | `CORS_ORIGINS` | none | Only needed for a browser client on another origin |
+| `WEB_URL` | `https://dobre-mleko.app` | The web app's address: shared place links (`/s/<token>`) and their previews point there |
 | `APNS_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | – | Push notifications: the APNs auth key (.p8 contents; `\n` escapes accepted), its key id and the Apple team id. Without them nothing is sent |
 | `APNS_APP_IDS` | any | Bundle ids iOS devices may register with (the APNs topics), e.g. `pl.dobremleko.app,pl.dobremleko.app.dev` |
 | `FCM_SERVICE_ACCOUNT` | – | Android push: the Firebase service account's JSON key file contents. Without it Android devices are registered but not sent to |
@@ -223,7 +224,20 @@ on by default).
 - **Gold star:** to the place's author, unless they gave it themselves; opens the place.
 - **Someone joined:** when a person finishes onboarding (`POST /me/profile`, the first time), to whoever put
   their e-mail on the list (`allowed_emails.added_by`, in practice an admin) — the stand-in for "my invite was
-  used" while invites are not in the MVP.
+  used" while invites are not in the MVP — and to the member whose shared link they asked to join from.
+- **Join request:** to admins (with `joins` on) when someone asks to join from a shared link.
+
+### Sharing places
+
+`POST /places/{id}/shares` gives a member their link to a place (`https://dobre-mleko.app/s/<token>`, the same
+each time); the apps send it through the system share sheet. Anyone with the link — no sign-in — gets a preview
+of that place only: `GET /shares/{token}` (name, category, rating, the sharer's name, badge and rating) and
+`GET /shares/{token}/cover`. The web app's nginx sends link-preview bots (Messenger, WhatsApp, …) for `/s/<token>`
+to `GET /shares/{token}/og`, an HTML page with Open Graph tags; people get the web app's page, which counts the
+visit (`POST /shares/{token}/open`), points to the app stores and lets them ask to join: `POST /join-requests`
+(e-mail of the Google or Apple account, name, the token). Admins see the requests and per-member sharing numbers in
+`GET /admin/join-requests` and accept (puts the e-mail on the list) or dismiss them. `WEB_URL` sets the address
+the links use.
 - **Admins** (`/admin/push`): who gets notifications on which devices, a message to everyone, to chosen people
   or by favourite category (optionally opening a place), and the log of everything sent (`/admin/push/log`).
 

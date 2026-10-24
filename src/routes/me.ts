@@ -152,7 +152,7 @@ export function meRoutes(app: App, ctx: Ctx) {
         summary: 'Delete my account',
         description:
           'Removes the personal data: e-mail, name, badge, avatar, Google/Apple ids, favourite categories, saved ' +
-          'places, the wishlist, devices and the place on the access list. Places, ratings, photos and comments stay, shown as ' +
+          'places, the wishlist, shared links, devices and the place on the access list. Places, ratings, photos and comments stay, shown as ' +
           'by "Były członek" (status `deleted`). Every session ends. Signing in again with the same e-mail starts ' +
           'a new account, once an admin puts it back on the list. ADMIN_EMAILS admins stay on the list.',
       },
@@ -172,6 +172,7 @@ export function meRoutes(app: App, ctx: Ctx) {
         `;
         await tx`delete from saved_places where user_id = ${req.user.id}`;
         await tx`delete from wishlist_items where user_id = ${req.user.id}`;
+        await tx`delete from place_shares where shared_by = ${req.user.id}`;
         await tx`delete from devices where user_id = ${req.user.id}`;
         if (!ctx.config.ADMIN_EMAILS.includes(user!.email)) {
           await tx`delete from allowed_emails where email = ${user!.email}`;

@@ -48,7 +48,9 @@ export const NotificationPrefs = z
     comments: z.boolean().meta({ description: 'Comments on places I added, commented on or saved' }),
     gold_stars: z.boolean().meta({ description: 'Someone gave a place I added a gold star' }),
     joins: z.boolean().meta({
-      description: 'Someone whose e-mail I put on the list joined (finished onboarding) — in practice, for admins',
+      description:
+        'Someone joined (finished onboarding) whom I put on the list or who asked to join from my shared link; ' +
+        'for admins also new join requests',
     }),
   })
   .meta({ id: 'NotificationPrefs', description: 'What push notifications I get.' });
@@ -435,7 +437,7 @@ export const PushOverview = z
 export const PushLogEntry = PushCounts.extend({
   id: z.uuid(),
   created_at: isoDate,
-  kind: z.enum(['new_place', 'new_comment', 'gold_star', 'member_joined', 'admin']),
+  kind: z.enum(['new_place', 'new_comment', 'gold_star', 'member_joined', 'join_request', 'admin']),
   title: z.string(),
   body: z.string(),
   place_id: z.uuid().nullable(),
@@ -592,3 +594,74 @@ export const MemberRatingList = z
 export const MemberList = z
   .object({ items: z.array(MemberSummary), total: z.number().int() })
   .meta({ id: 'MemberList' });
+
+export const PlaceShare = z
+  .object({
+    token: z.string(),
+    url: z.string().meta({ description: "The link to send: the web app's /s/<token> page (with a link preview)" }),
+  })
+  .meta({ id: 'PlaceShare', description: "A member's link to a place, the same one each time." });
+
+export const SharePreview = z
+  .object({
+    token: z.string(),
+    place: z.object({
+      id: z.uuid(),
+      name: z.string(),
+      category_id: category,
+      category_label: z.string(),
+      address: z.string().nullable(),
+      rating_avg: z.number().nullable(),
+      rating_count: z.number().int(),
+      gold_star_count: z.number().int(),
+      cover_url: z.string().nullable().meta({ description: 'Public cover image of this share (not a signed URL)' }),
+      cover_width: z.number().int().nullable(),
+      cover_height: z.number().int().nullable(),
+    }),
+    shared_by: z.object({
+      display_name: z.string(),
+      badge: z.string().nullable(),
+      rating: z.number().nullable().meta({ description: 'Their own rating of the place (1–5), if any' }),
+    }),
+  })
+  .meta({
+    id: 'SharePreview',
+    description: 'What anyone with a shared link sees — only this place, without other members or comments.',
+  });
+
+export const JoinRequestResult = z
+  .object({
+    status: z.enum(['pending', 'allowed']).meta({
+      description: '`pending`: an admin will look at it; `allowed`: the e-mail is already on the list — sign in',
+    }),
+  })
+  .meta({ id: 'JoinRequestResult' });
+
+export const JoinRequest = z
+  .object({
+    id: z.uuid(),
+    email: z.string(),
+    name: z.string(),
+    status: z.enum(['pending', 'accepted', 'dismissed']),
+    created_at: isoDate,
+    referred_by: z.object({ id: z.uuid(), display_name: z.string() }).nullable(),
+    place: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+    handled_at: isoDate.nullable(),
+    joined: z.boolean().meta({ description: 'Signed in and finished onboarding' }),
+  })
+  .meta({ id: 'JoinRequest' });
+
+export const JoinRequestOverview = z
+  .object({
+    items: z.array(JoinRequest).meta({ description: 'Pending first, then the latest 100 handled' }),
+    sharers: z.array(
+      z.object({
+        member: z.object({ id: z.uuid(), display_name: z.string() }),
+        shares: z.number().int().meta({ description: 'Places shared' }),
+        opens: z.number().int().meta({ description: 'Times their links were opened' }),
+        requests: z.number().int(),
+        joined: z.number().int(),
+      }),
+    ),
+  })
+  .meta({ id: 'JoinRequestOverview', description: 'Join requests and how sharing works, per member.' });

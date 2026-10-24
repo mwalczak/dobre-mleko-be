@@ -102,21 +102,63 @@ export function notifyGoldStar(ctx: Ctx, placeId: string, giverId: string): void
 
 /**
  * Someone joined (finished onboarding): to whoever put their e-mail on the list — the closest thing to "my invite
- * was used" while invites are not in the MVP.
+ * was used" while invites are not in the MVP — and to the member whose shared link they asked to join from.
  */
 export function notifyJoined(ctx: Ctx, userId: string): void {
   ctx.notifier.background(async () => {
-    const [row] = await ctx.sql<{ inviter: string; name: string; email: string }[]>`
-      select i.id as inviter, u.name, u.email
-      from users u join allowed_emails a on a.email = u.email join users i on i.id = a.added_by
-      where u.id = ${userId} and i.id <> u.id and i.status = 'active' and i.notify_joins
+    const [row] = await ctx.sql<{ inviter: string | null; referrer: string | null; name: string; email: string }[]>`
+      select
+        (select i.id from allowed_emails a join users i on i.id = a.added_by
+         where a.email = u.email and i.id <> u.id and i.status = 'active' and i.notify_joins) as inviter,
+        (select r.id from join_requests j join users r on r.id = j.referred_by
+         where j.email = u.email and j.status = 'accepted' and r.id <> u.id and r.status = 'active' and r.notify_joins
+         order by j.handled_at desc limit 1) as referrer,
+        u.name, u.email
+      from users u where u.id = ${userId}
     `;
     if (!row) return;
+    const title = clip(`${row.name} dołącza do Dobrego Mleka`, 120);
+    if (row.referrer) {
+      await ctx.notifier.deliver(
+        'member_joined',
+        [row.referrer],
+        { title, body: 'Dzięki Twojemu poleceniu 🥛' },
+        { kind: 'member_joined', as: 'referrer' },
+      );
+    }
+    if (row.inviter && row.inviter !== row.referrer) {
+      await ctx.notifier.deliver(
+        'member_joined',
+        [row.inviter],
+        { title, body: clip(`${row.email} — z Twojej listy`, 160) },
+        { kind: 'member_joined' },
+      );
+    }
+  });
+}
+
+/** Someone asked to join from a shared link: to the admins who want to hear about joins. */
+export function notifyJoinRequest(ctx: Ctx, requestId: string): void {
+  ctx.notifier.background(async () => {
+    const [j] = await ctx.sql<{ name: string; email: string; referrer: string | null; place: string | null }[]>`
+      select j.name, j.email, r.name as referrer, p.name as place
+      from join_requests j left join users r on r.id = j.referred_by left join places p on p.id = j.place_id
+      where j.id = ${requestId}
+    `;
+    if (!j) return;
+    const admins = await ctx.sql<{ id: string }[]>`
+      select u.id from users u join allowed_emails a on a.email = u.email
+      where a.role = 'admin' and u.status = 'active' and u.notify_joins
+    `;
+    const via = [j.referrer && `poleca ${j.referrer}`, j.place].filter(Boolean).join(' · ');
     await ctx.notifier.deliver(
-      'member_joined',
-      [row.inviter],
-      { title: clip(`${row.name} dołącza do Dobrego Mleka`, 120), body: clip(`${row.email} — z Twojej listy`, 160) },
-      { kind: 'member_joined' },
+      'join_request',
+      admins.map((a) => a.id),
+      {
+        title: clip(`Prośba o dołączenie: ${j.name}`, 120),
+        body: clip([j.email, via].filter(Boolean).join(' — '), 160),
+      },
+      { kind: 'join_request' },
     );
   });
 }

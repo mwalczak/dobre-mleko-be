@@ -247,7 +247,7 @@ export class PlatformPushSender implements PushSender {
   }
 }
 
-export type PushKind = 'new_place' | 'new_comment' | 'gold_star' | 'member_joined' | 'admin';
+export type PushKind = 'new_place' | 'new_comment' | 'gold_star' | 'member_joined' | 'join_request' | 'admin';
 
 export interface PushCounts {
   recipients: number;

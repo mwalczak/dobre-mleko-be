@@ -34,6 +34,12 @@ const schema = z.object({
   // Directory (a persistent volume in production) where photo files are stored.
   PHOTO_DIR: z.string().default('./data/photos'),
   CORS_ORIGINS: csv,
+  // The web app's address: shared place links (/s/<token>) and their link previews point there.
+  WEB_URL: z
+    .string()
+    .trim()
+    .default('https://dobre-mleko.app')
+    .transform((s) => s.replace(/\/+$/, '')),
   // Apple Push Notification service: the .p8 key (PEM, `\n` escapes accepted), its key id and the team id.
   // Without them push notifications are off (devices are still registered).
   APNS_KEY: z.string().default(''),

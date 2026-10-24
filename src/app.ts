@@ -46,6 +46,7 @@ import { photoRoutes } from './routes/photos.js';
 import { placeRoutes } from './routes/places.js';
 import { ratingRoutes } from './routes/ratings.js';
 import { reportRoutes } from './routes/reports.js';
+import { shareRoutes } from './routes/shares.js';
 import { statsRoutes } from './routes/stats.js';
 import { wishlistRoutes } from './routes/wishlist.js';
 import { ErrorBody } from './schemas.js';
@@ -255,6 +256,7 @@ export async function buildApp(deps: AppDeps) {
     iconRoutes,
     pushRoutes,
     reportRoutes,
+    shareRoutes,
   ]) {
     routes(app, ctx);
   }
