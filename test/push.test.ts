@@ -61,7 +61,7 @@ describe('devices and settings', () => {
 
   it('keeps notification preferences on the profile', async () => {
     const ola = await login(h.app, 'ola@gmail.com');
-    const defaults = { new_places: 'favorites', comments: true, gold_stars: true, joins: true };
+    const defaults = { new_places: 'favorites', comments: true, gold_stars: true, joins: true, mentions: true };
     expect((await call('GET', '/me', ola)).json().notifications).toEqual(defaults);
     const res = await call('PATCH', '/me', ola, { notifications: { new_places: 'all', gold_stars: false } });
     expect(res.json().notifications).toEqual({ ...defaults, new_places: 'all', gold_stars: false });
@@ -189,7 +189,7 @@ describe('admin push panel', () => {
     expect(res.configured).toBe(true);
     const olaRow = res.members.find((m: { email: string }) => m.email === 'ola@gmail.com');
     expect(olaRow).toMatchObject({
-      notifications: { new_places: 'favorites', comments: true, gold_stars: true, joins: true },
+      notifications: { new_places: 'favorites', comments: true, gold_stars: true, joins: true, mentions: true },
       devices: [{ platform: 'ios', environment: 'sandbox', app_id: 'pl.dobremleko.app' }],
     });
     expect(res.members.find((m: { email: string }) => m.email === ADMIN).devices).toEqual([]);

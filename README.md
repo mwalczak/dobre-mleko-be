@@ -216,8 +216,8 @@ The apps register their device token with `PUT /me/devices` (token, platform, AP
 development-signed builds, `production` for TestFlight and the App Store — and the bundle id, the APNs topic) and
 remove it with `DELETE /me/devices/{token}` on sign-out. People choose what they get in `PATCH /me`
 (`notifications`): new places — `all`, `favorites` (only in their favourite categories; the default) or `none` —
-comments (on places they added, commented on or saved), gold stars and joins (`gold_stars`, `joins`; all three
-on by default).
+comments (on places they added, commented on or saved), gold stars, joins and mentions (`gold_stars`, `joins`,
+`mentions`; all on by default).
 
 - **New place:** to people with its category among their favourites, or who want all new places; not its author.
 - **New comment:** to the place's author, others who commented on it and those who saved it; not the commenter.
@@ -226,6 +226,14 @@ on by default).
   their e-mail on the list (`allowed_emails.added_by`, in practice an admin) — the stand-in for "my invite was
   used" while invites are not in the MVP — and to the member whose shared link they asked to join from.
 - **Join request:** to admins (with `joins` on) when someone asks to join from a shared link.
+- **Mention:** to members mentioned with `@Imię` in a comment (`mention_ids`; `mentions` setting) — instead of the
+  new-comment notification, once per comment (editing notifies only those mentioned anew).
+
+### Reactions to comments
+
+`PUT /comments/{id}/reaction {reaction}` — one per member and comment (another replaces it), `DELETE` takes it back.
+Reactions: `love`, `like`, `haha`, `wow`, `yum`, `fire`, `sad` (in display order; the apps draw Bauhaus glyphs).
+Every comment carries `reactions` (count and names per reaction), `my_reaction` and `mentions`.
 
 ### Sharing places
 

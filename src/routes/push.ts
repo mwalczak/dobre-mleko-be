@@ -109,7 +109,7 @@ export function pushRoutes(app: App, ctx: Ctx) {
         } & NotifyColumns)[]
       >`
         select u.id, profile_json(u) as profile, u.email, u.notify_new_places, u.notify_comments,
-          u.notify_gold_stars, u.notify_joins
+          u.notify_gold_stars, u.notify_joins, u.notify_mentions
         from users u where u.status = 'active'
         order by lower(u.name)
       `;

@@ -33,7 +33,7 @@ export async function loadMe(ctx: Ctx, userId: string) {
     } & NotifyColumns)[]
   >`
     select profile_json(u) as profile, u.email, u.profile_completed_at, u.notify_new_places, u.notify_comments,
-      u.notify_gold_stars, u.notify_joins
+      u.notify_gold_stars, u.notify_joins, u.notify_mentions
     from users u where u.id = ${userId}
   `;
   if (!user) throw notFound('User');
@@ -138,6 +138,7 @@ export function meRoutes(app: App, ctx: Ctx) {
       if (b.notifications?.comments !== undefined) set.notify_comments = b.notifications.comments;
       if (b.notifications?.gold_stars !== undefined) set.notify_gold_stars = b.notifications.gold_stars;
       if (b.notifications?.joins !== undefined) set.notify_joins = b.notifications.joins;
+      if (b.notifications?.mentions !== undefined) set.notify_mentions = b.notifications.mentions;
       if (Object.keys(set).length) await sql`update users set ${sql(set)} where id = ${req.user.id}`;
       return loadMe(ctx, req.user.id);
     },
@@ -167,7 +168,7 @@ export function meRoutes(app: App, ctx: Ctx) {
             status = 'deleted', name = ${DELETED_NAME}, email = ${`deleted-${req.user.id}@deleted.invalid`},
             google_sub = null, apple_sub = null, avatar_hash = null, avatar_url = null, badge = null,
             favorite_categories = '{}', notify_new_places = 'none', notify_comments = false,
-            notify_gold_stars = false, notify_joins = false
+            notify_gold_stars = false, notify_joins = false, notify_mentions = false
           where id = ${req.user.id}
         `;
         await tx`delete from saved_places where user_id = ${req.user.id}`;

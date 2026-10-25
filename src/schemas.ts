@@ -52,6 +52,7 @@ export const NotificationPrefs = z
         'Someone joined (finished onboarding) whom I put on the list or who asked to join from my shared link; ' +
         'for admins also new join requests',
     }),
+    mentions: z.boolean().meta({ description: 'Someone mentioned me (@) in a comment' }),
   })
   .meta({ id: 'NotificationPrefs', description: 'What push notifications I get.' });
 
@@ -172,6 +173,14 @@ export const Scores = z.object({ vibe: score, offer: score, service: score.nulla
   description: 'vibe = klimat, offer = oferta, service = obsługa, value = wartość; null = nie dotyczy',
 });
 
+export const REACTIONS = ['love', 'like', 'haha', 'wow', 'yum', 'fire', 'sad'] as const;
+const Reaction = z.enum(REACTIONS).meta({
+  id: 'Reaction',
+  description:
+    'A reaction to a comment, in display order: love (Uwielbiam), like (Super), haha, wow, yum (Pycha), fire ' +
+    '(Petarda), sad (Smutno). The apps draw them as Bauhaus glyphs.',
+});
+
 export const Comment = z
   .object({
     id: z.uuid(),
@@ -181,6 +190,19 @@ export const Comment = z
     is_mine: z.boolean(),
     created_at: isoDate,
     updated_at: isoDate.nullable(),
+    reactions: z
+      .array(
+        z.object({
+          reaction: Reaction,
+          count: z.number().int(),
+          names: z.array(z.string()).meta({ description: 'Who reacted, first come first' }),
+        }),
+      )
+      .meta({ description: 'Reactions given, in display order (only those with a count)' }),
+    my_reaction: Reaction.nullable(),
+    mentions: z
+      .array(z.object({ id: z.uuid(), display_name: z.string() }))
+      .meta({ description: 'Members mentioned (`@Imię` in the text) — the apps highlight and link them' }),
   })
   .meta({ id: 'Comment' });
 
@@ -437,7 +459,7 @@ export const PushOverview = z
 export const PushLogEntry = PushCounts.extend({
   id: z.uuid(),
   created_at: isoDate,
-  kind: z.enum(['new_place', 'new_comment', 'gold_star', 'member_joined', 'join_request', 'admin']),
+  kind: z.enum(['new_place', 'new_comment', 'gold_star', 'member_joined', 'join_request', 'mention', 'admin']),
   title: z.string(),
   body: z.string(),
   place_id: z.uuid().nullable(),

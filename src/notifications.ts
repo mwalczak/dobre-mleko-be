@@ -13,6 +13,7 @@ export interface NotifyColumns {
   notify_comments: boolean;
   notify_gold_stars: boolean;
   notify_joins: boolean;
+  notify_mentions: boolean;
 }
 
 export const toNotificationPrefs = (u: NotifyColumns) => ({
@@ -20,6 +21,7 @@ export const toNotificationPrefs = (u: NotifyColumns) => ({
   comments: u.notify_comments,
   gold_stars: u.notify_gold_stars,
   joins: u.notify_joins,
+  mentions: u.notify_mentions,
 });
 
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
@@ -59,7 +61,14 @@ export function notifyNewPlace(ctx: Ctx, placeId: string, authorId: string): voi
  * A new comment: to the place's author, others who commented on it and those who saved it — not to the commenter,
  * and only to people who want comment notifications.
  */
-export function notifyComment(ctx: Ctx, placeId: string, commenterId: string, body: string): void {
+export function notifyComment(
+  ctx: Ctx,
+  placeId: string,
+  commenterId: string,
+  body: string,
+  /** Mentioned in it: they get the mention notification instead. */
+  mentioned: string[] = [],
+): void {
   ctx.notifier.background(async () => {
     const [place] = await ctx.sql<{ name: string; commenter: string }[]>`
       select p.name, (select name from users where id = ${commenterId}) as commenter from places p where p.id = ${placeId}
@@ -68,6 +77,7 @@ export function notifyComment(ctx: Ctx, placeId: string, commenterId: string, bo
     const rows = await ctx.sql<{ id: string }[]>`
       select u.id from users u
       where u.status = 'active' and u.notify_comments and u.id <> ${commenterId}
+        and not (u.id = any(${mentioned}::uuid[]))
         and (u.id = (select added_by from places where id = ${placeId})
              or exists (select 1 from comments c where c.place_id = ${placeId} and c.user_id = u.id)
              or exists (select 1 from saved_places s where s.place_id = ${placeId} and s.user_id = u.id))
@@ -77,6 +87,28 @@ export function notifyComment(ctx: Ctx, placeId: string, commenterId: string, bo
       rows.map((r) => r.id),
       { title: clip(`${place.commenter} o: ${place.name}`, 120), body: clip(body, 160), placeId },
       { kind: 'new_comment' },
+    );
+  });
+}
+
+/** Mentioned (@) in a comment: to them, if they want mention notifications; opens the place. */
+export function notifyMention(ctx: Ctx, commentId: string, userIds: string[]): void {
+  if (!userIds.length) return;
+  ctx.notifier.background(async () => {
+    const [c] = await ctx.sql<{ place_id: string; place: string; author: string; body: string }[]>`
+      select c.place_id, p.name as place, u.name as author, c.body
+      from comments c join places p on p.id = c.place_id join users u on u.id = c.user_id
+      where c.id = ${commentId}
+    `;
+    if (!c) return;
+    const rows = await ctx.sql<{ id: string }[]>`
+      select id from users where id = any(${userIds}::uuid[]) and status = 'active' and notify_mentions
+    `;
+    await ctx.notifier.deliver(
+      'mention',
+      rows.map((r) => r.id),
+      { title: clip(`${c.author} wspomina o Tobie: ${c.place}`, 120), body: clip(c.body, 160), placeId: c.place_id },
+      { kind: 'mention' },
     );
   });
 }

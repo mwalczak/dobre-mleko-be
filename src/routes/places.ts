@@ -201,7 +201,7 @@ export async function loadPlace(ctx: Ctx, placeId: string, userId: string, near?
     sql<{ created_at: Date }[]>`
       select created_at from stars where place_id = ${placeId} and user_id = ${userId} and month = ${month}::date
     `,
-    selectComments(ctx, { placeId }),
+    selectComments(ctx, { placeId }, userId),
     starsLeft(ctx, userId, month),
   ]);
 

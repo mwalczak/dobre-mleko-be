@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { cleanupUnattached, PhotoStore } from '../src/photo-store.js';
 import {
   ADMIN,
+  pushes,
   createPlace,
   kreska,
   login,
@@ -91,6 +92,87 @@ describe('comments', () => {
     expect(
       (await h.app.inject({ method: 'DELETE', url: `/comments/${c.id}`, headers: admin.headers })).statusCode,
     ).toBe(204);
+  });
+});
+
+describe('reactions and mentions', () => {
+  const post = (who: Who, url: string, payload: object, method: 'POST' | 'PUT' | 'PATCH' = 'POST') =>
+    h.app.inject({ method, url, headers: who.headers, payload });
+
+  it('one reaction per member and comment, in display order, with names; mine shows', async () => {
+    const ola = await login(h.app, 'ola@gmail.com');
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const tomek = await login(h.app, 'tomek@gmail.com');
+    const id = await createPlace(h.app, ola, pawilon);
+    const c = (await post(ola, `/places/${id}/comments`, { body: 'Byłam wczoraj' })).json();
+    expect(c).toMatchObject({ reactions: [], my_reaction: null, mentions: [] });
+
+    await post(kuba, `/comments/${c.id}/reaction`, { reaction: 'fire' }, 'PUT');
+    await post(tomek, `/comments/${c.id}/reaction`, { reaction: 'fire' }, 'PUT');
+    const mine = (await post(ola, `/comments/${c.id}/reaction`, { reaction: 'love' }, 'PUT')).json();
+    expect(mine.my_reaction).toBe('love');
+    expect(mine.reactions).toEqual([
+      { reaction: 'love', count: 1, names: [expect.any(String)] },
+      { reaction: 'fire', count: 2, names: expect.any(Array) },
+    ]);
+    // Another reaction replaces mine; taking it back removes it.
+    expect((await post(kuba, `/comments/${c.id}/reaction`, { reaction: 'haha' }, 'PUT')).json().reactions).toEqual([
+      { reaction: 'love', count: 1, names: expect.any(Array) },
+      { reaction: 'haha', count: 1, names: expect.any(Array) },
+      { reaction: 'fire', count: 1, names: expect.any(Array) },
+    ]);
+    const back = await h.app.inject({ method: 'DELETE', url: `/comments/${c.id}/reaction`, headers: kuba.headers });
+    expect(back.json()).toMatchObject({ my_reaction: null });
+    expect(back.json().reactions.map((r: { reaction: string }) => r.reaction)).toEqual(['love', 'fire']);
+    // The viewer's own reaction in the place detail.
+    const place = (await h.app.inject({ method: 'GET', url: `/places/${id}`, headers: tomek.headers })).json();
+    expect(place.comments[0].my_reaction).toBe('fire');
+    expect((await post(kuba, `/comments/${c.id}/reaction`, { reaction: 'meh' }, 'PUT')).statusCode).toBe(422);
+  });
+
+  it('mentions notify the mentioned once, instead of the comment notification', async () => {
+    const ola = await login(h.app, 'ola@gmail.com');
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const tomek = await login(h.app, 'tomek@gmail.com');
+    for (const [who, name] of [
+      [ola, 'ola'],
+      [kuba, 'kuba'],
+      [tomek, 'tomek'],
+    ] as const) {
+      await post(
+        who,
+        '/me/devices',
+        { token: name.padEnd(64, '0'), platform: 'ios', environment: 'sandbox', app_id: 'pl.dobremleko.app' },
+        'PUT',
+      );
+    }
+    const id = await createPlace(h.app, ola, pawilon);
+    await h.app.settle();
+    pushes.sent = [];
+
+    // Kuba mentions Tomek (and himself, ignored); Ola, the place's author, gets the usual comment notification.
+    const c = (
+      await post(kuba, `/places/${id}/comments`, { body: '@Tomek musisz tu wpaść', mention_ids: [tomek.id, kuba.id] })
+    ).json();
+    expect(c.mentions).toEqual([{ id: tomek.id, display_name: expect.any(String) }]);
+    await h.app.settle();
+    const byToken = Object.fromEntries(pushes.sent.map((p) => [p.token.replace(/0+$/, ''), p.title]));
+    expect(Object.keys(byToken).sort()).toEqual(['ola', 'tomek']);
+    expect(byToken.tomek).toMatch(/wspomina o Tobie: Pawilon Nocny$/);
+
+    // Editing: only newly mentioned members are notified; without mention_ids the mentions stay.
+    pushes.sent = [];
+    await post(kuba, `/comments/${c.id}`, { body: '@Tomek @Ola musicie', mention_ids: [tomek.id, ola.id] }, 'PATCH');
+    await post(kuba, `/comments/${c.id}`, { body: '@Tomek @Ola musicie!' }, 'PATCH');
+    await h.app.settle();
+    expect(pushes.sent.map((p) => p.token.replace(/0+$/, ''))).toEqual(['ola']);
+
+    // Mention notifications can be turned off.
+    await post(tomek, '/me', { notifications: { mentions: false } }, 'PATCH');
+    pushes.sent = [];
+    await post(ola, `/places/${id}/comments`, { body: '@Tomek', mention_ids: [tomek.id] });
+    await h.app.settle();
+    expect(pushes.sent.map((p) => p.token.replace(/0+$/, ''))).not.toContain('tomek');
   });
 });
 
