@@ -67,6 +67,10 @@ export async function selectComments(
 
 const order = (reaction: Reaction) => REACTIONS.indexOf(reaction);
 
+/** Reaction counts in display order. */
+export const sortReactions = <T extends { reaction: Reaction }>(reactions: T[]) =>
+  [...reactions].sort((a, b) => order(a.reaction) - order(b.reaction));
+
 export const toComment = (ctx: Ctx, r: CommentRow, userId: string) => ({
   id: r.id,
   body: r.body,
@@ -75,7 +79,7 @@ export const toComment = (ctx: Ctx, r: CommentRow, userId: string) => ({
   is_mine: r.author.id === userId,
   created_at: r.created_at.toISOString(),
   updated_at: r.updated_at?.toISOString() ?? null,
-  reactions: [...r.reactions].sort((a, b) => order(a.reaction) - order(b.reaction)),
+  reactions: sortReactions(r.reactions),
   my_reaction: r.my_reaction,
   mentions: r.mentions,
 });

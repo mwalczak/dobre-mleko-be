@@ -12,8 +12,8 @@ import { placeAuthor, requireOwnerOrAdmin } from '../place-access.js';
 import { PLACE_SORTS, queryPlaces, toPhoto, toPlaceSummary } from '../places-query.js';
 import { toProfile, type ProfileJson } from '../profiles.js';
 import { attachRatingPhotos, awardGoldStar, ratingBody } from '../rating-logic.js';
-import { CardStyle, ErrorBody, PlaceDetail, PlaceList, SavedResult } from '../schemas.js';
-import { selectComments, toComment } from './comments.js';
+import { CardStyle, ErrorBody, PlaceDetail, PlaceList, PlaceReactions, REACTIONS, SavedResult } from '../schemas.js';
+import { selectComments, sortReactions, toComment } from './comments.js';
 import { checkVisitedOn } from './wishlist.js';
 import { starsLeft } from './me.js';
 
@@ -151,6 +151,27 @@ const nearQuery = z
   .object({ lat: z.coerce.number().min(-90).max(90).optional(), lng: z.coerce.number().min(-180).max(180).optional() })
   .refine((q) => (q.lat == null) === (q.lng == null), { message: 'lat and lng go together' });
 
+type Reaction = (typeof REACTIONS)[number];
+
+/** Reactions to a place's recommendation, in display order, and the viewer's own. */
+async function placeReactions(ctx: Ctx, placeId: string, userId: string) {
+  const [counts, [mine]] = await Promise.all([
+    ctx.sql<{ reaction: Reaction; count: number; names: string[] }[]>`
+      select pr.reaction, count(*)::int as count, array_agg(u.name order by pr.created_at) as names
+      from place_reactions pr join users u on u.id = pr.user_id
+      where pr.place_id = ${placeId}
+      group by pr.reaction
+    `,
+    ctx.sql<{ reaction: Reaction }[]>`
+      select reaction from place_reactions where place_id = ${placeId} and user_id = ${userId}
+    `,
+  ]);
+  return {
+    reactions: sortReactions(counts.map((c) => ({ reaction: c.reaction, count: c.count, names: c.names }))),
+    my_reaction: mine?.reaction ?? null,
+  };
+}
+
 export async function loadPlace(ctx: Ctx, placeId: string, userId: string, near?: { lat: number; lng: number }) {
   const { sql, config } = ctx;
   const v = view(ctx);
@@ -164,46 +185,48 @@ export async function loadPlace(ctx: Ctx, placeId: string, userId: string, near?
   });
   if (!row) throw notFound('Place');
 
-  const [[extra], photos, [criteria], distribution, [mine], awarders, [myStar], comments, left] = await Promise.all([
-    sql<{ google_place_id: string | null; google_maps_url: string | null }[]>`
+  const [[extra], photos, [criteria], distribution, [mine], awarders, [myStar], comments, left, reactions] =
+    await Promise.all([
+      sql<{ google_place_id: string | null; google_maps_url: string | null }[]>`
       select google_place_id, google_maps_url from places where id = ${placeId}
     `,
-    sql<
-      {
-        id: string;
-        hash: string;
-        blurhash: string | null;
-        width: number | null;
-        height: number | null;
-        uploaded_by: string;
-      }[]
-    >`
+      sql<
+        {
+          id: string;
+          hash: string;
+          blurhash: string | null;
+          width: number | null;
+          height: number | null;
+          uploaded_by: string;
+        }[]
+      >`
       select id, hash, blurhash, width, height, uploaded_by from place_photos
       where place_id = ${placeId} order by position nulls last, created_at, id
     `,
-    sql<Record<string, number | null>[]>`
+      sql<Record<string, number | null>[]>`
       select avg(vibe)::numeric(3, 2) as vibe, avg(offer)::numeric(3, 2) as offer,
              avg(service)::numeric(3, 2) as service, avg(value)::numeric(3, 2) as value,
              count(service)::int as service_count, count(value)::int as value_count
       from ratings where place_id = ${placeId}
     `,
-    sql<{ stars: number; n: number }[]>`
+      sql<{ stars: number; n: number }[]>`
       select round(overall)::int as stars, count(*)::int as n from ratings where place_id = ${placeId} group by 1
     `,
-    sql<{ vibe: number; offer: number; service: number | null; value: number | null; visited_on: string | null }[]>`
+      sql<{ vibe: number; offer: number; service: number | null; value: number | null; visited_on: string | null }[]>`
       select vibe, offer, service, value, to_char(visited_on, 'YYYY-MM-DD') as visited_on
       from ratings where place_id = ${placeId} and user_id = ${userId}
     `,
-    sql<{ profile: ProfileJson }[]>`
+      sql<{ profile: ProfileJson }[]>`
       select profile_json(u) as profile from stars s join users u on u.id = s.user_id
       where s.place_id = ${placeId} order by s.created_at desc
     `,
-    sql<{ created_at: Date }[]>`
+      sql<{ created_at: Date }[]>`
       select created_at from stars where place_id = ${placeId} and user_id = ${userId} and month = ${month}::date
     `,
-    selectComments(ctx, { placeId }, userId),
-    starsLeft(ctx, userId, month),
-  ]);
+      selectComments(ctx, { placeId }, userId),
+      starsLeft(ctx, userId, month),
+      placeReactions(ctx, placeId, userId),
+    ]);
 
   const breakdown = CRITERIA.map((c) => ({
     key: c.key,
@@ -232,6 +255,7 @@ export async function loadPlace(ctx: Ctx, placeId: string, userId: string, near?
     can_revoke_gold_star: !!myStar,
     gold_stars_left: left,
     comments: comments.map((c) => toComment(ctx, c, userId)),
+    ...reactions,
     is_mine: row.author.id === userId,
   };
 }
@@ -452,4 +476,46 @@ export function placeRoutes(app: App, ctx: Ctx) {
     await sql`delete from saved_places where user_id = ${req.user.id} and place_id = ${req.params.id}`;
     return { is_saved: false };
   });
+
+  const reactionSchema = (summary: string, description?: string) => ({
+    tags: ['Places'],
+    summary,
+    description,
+    params: idParams,
+    response: { 200: PlaceReactions },
+  });
+
+  app.put(
+    '/places/:id/reaction',
+    {
+      preHandler: ctx.auth,
+      schema: {
+        ...reactionSchema(
+          'React to the recommendation',
+          'To „Dlaczego warto” by the person who added the place. One reaction per member and place: another one ' +
+            'replaces it. Also on my own places.',
+        ),
+        body: z.object({ reaction: z.enum(REACTIONS) }),
+      },
+    },
+    async (req) => {
+      await placeAuthor(ctx, req.params.id);
+      await sql`
+        insert into place_reactions (place_id, user_id, reaction)
+        values (${req.params.id}, ${req.user.id}, ${req.body.reaction})
+        on conflict (place_id, user_id) do update set reaction = excluded.reaction, created_at = now()
+      `;
+      return placeReactions(ctx, req.params.id, req.user.id);
+    },
+  );
+
+  app.delete(
+    '/places/:id/reaction',
+    { preHandler: ctx.auth, schema: reactionSchema('Take back my reaction to the recommendation') },
+    async (req) => {
+      await placeAuthor(ctx, req.params.id);
+      await sql`delete from place_reactions where place_id = ${req.params.id} and user_id = ${req.user.id}`;
+      return placeReactions(ctx, req.params.id, req.user.id);
+    },
+  );
 }

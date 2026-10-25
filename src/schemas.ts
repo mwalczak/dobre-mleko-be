@@ -177,9 +177,23 @@ export const REACTIONS = ['love', 'like', 'haha', 'wow', 'yum', 'fire', 'sad', '
 const Reaction = z.enum(REACTIONS).meta({
   id: 'Reaction',
   description:
-    'A reaction to a comment, in display order: love (Uwielbiam), like (Super), haha, wow, yum (Pycha), fire ' +
+    'A reaction to a comment or a place recommendation, in display order: love (Uwielbiam), like (Super), haha, wow, yum (Pycha), fire ' +
     '(Petarda), sad (Smutno), cancel (Cancel, ❌). The apps draw them as Bauhaus glyphs.',
 });
+
+const ReactionCounts = z
+  .array(
+    z.object({
+      reaction: Reaction,
+      count: z.number().int(),
+      names: z.array(z.string()).meta({ description: 'Who reacted, first come first' }),
+    }),
+  )
+  .meta({ description: 'Reactions given, in display order (only those with a count)' });
+
+export const PlaceReactions = z
+  .object({ reactions: ReactionCounts, my_reaction: Reaction.nullable() })
+  .meta({ id: 'PlaceReactions', description: 'Reactions to a place recommendation (description, by its author)' });
 
 export const Comment = z
   .object({
@@ -190,15 +204,7 @@ export const Comment = z
     is_mine: z.boolean(),
     created_at: isoDate,
     updated_at: isoDate.nullable(),
-    reactions: z
-      .array(
-        z.object({
-          reaction: Reaction,
-          count: z.number().int(),
-          names: z.array(z.string()).meta({ description: 'Who reacted, first come first' }),
-        }),
-      )
-      .meta({ description: 'Reactions given, in display order (only those with a count)' }),
+    reactions: ReactionCounts,
     my_reaction: Reaction.nullable(),
     mentions: z
       .array(z.object({ id: z.uuid(), display_name: z.string() }))
@@ -223,6 +229,10 @@ export const PlaceDetail = PlaceSummary.extend({
   can_revoke_gold_star: z.boolean(),
   gold_stars_left: z.number().int(),
   comments: z.array(Comment).meta({ description: 'Oldest first' }),
+  reactions: ReactionCounts.meta({
+    description: 'Reactions to the recommendation („Dlaczego warto”, by the author), in display order',
+  }),
+  my_reaction: Reaction.nullable(),
   is_mine: z.boolean().meta({ description: 'I added this place' }),
 }).meta({ id: 'PlaceDetail' });
 

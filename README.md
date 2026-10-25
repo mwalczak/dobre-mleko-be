@@ -235,6 +235,10 @@ comments (on places they added, commented on or saved), gold stars, joins and me
 Reactions: `love`, `like`, `haha`, `wow`, `yum`, `fire`, `sad`, `cancel` (❌; in display order; the apps draw Bauhaus glyphs).
 Every comment carries `reactions` (count and names per reaction), `my_reaction` and `mentions`.
 
+The place recommendation („Dlaczego warto”, by the person who added the place) takes the same reactions:
+`PUT /places/{id}/reaction {reaction}`, `DELETE` takes it back; both answer `{reactions, my_reaction}`, which the
+place detail also carries.
+
 ### Sharing places
 
 `POST /places/{id}/shares` gives a member their link to a place (`https://dobre-mleko.app/s/<token>`, the same

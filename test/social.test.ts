@@ -133,6 +133,49 @@ describe('reactions and mentions', () => {
     );
   });
 
+  it('reactions to the place recommendation: one per member, in the detail, gone with the place', async () => {
+    const ola = await login(h.app, 'ola@gmail.com');
+    const kuba = await login(h.app, 'kuba@gmail.com');
+    const tomek = await login(h.app, 'tomek@gmail.com');
+    const id = await createPlace(h.app, ola, pawilon);
+    const detail = (who: Who) => h.app.inject({ method: 'GET', url: `/places/${id}`, headers: who.headers });
+    expect((await detail(kuba)).json()).toMatchObject({ reactions: [], my_reaction: null });
+
+    await post(tomek, `/places/${id}/reaction`, { reaction: 'yum' }, 'PUT');
+    const mine = (await post(kuba, `/places/${id}/reaction`, { reaction: 'love' }, 'PUT')).json();
+    expect(mine).toEqual({
+      reactions: [
+        { reaction: 'love', count: 1, names: ['Kuba'] },
+        { reaction: 'yum', count: 1, names: ['Tomek'] },
+      ],
+      my_reaction: 'love',
+    });
+    // Another one replaces mine; the author can react too.
+    await post(kuba, `/places/${id}/reaction`, { reaction: 'yum' }, 'PUT');
+    await post(ola, `/places/${id}/reaction`, { reaction: 'fire' }, 'PUT');
+    expect((await detail(kuba)).json()).toMatchObject({
+      reactions: [
+        { reaction: 'yum', count: 2, names: ['Tomek', 'Kuba'] },
+        { reaction: 'fire', count: 1, names: ['Ola'] },
+      ],
+      my_reaction: 'yum',
+    });
+    const back = await h.app.inject({ method: 'DELETE', url: `/places/${id}/reaction`, headers: kuba.headers });
+    expect(back.json()).toEqual({
+      reactions: [
+        { reaction: 'yum', count: 1, names: ['Tomek'] },
+        { reaction: 'fire', count: 1, names: ['Ola'] },
+      ],
+      my_reaction: null,
+    });
+    expect((await post(kuba, `/places/${id}/reaction`, { reaction: 'meh' }, 'PUT')).statusCode).toBe(422);
+    const missing = '00000000-0000-4000-8000-000000000000';
+    expect((await post(kuba, `/places/${missing}/reaction`, { reaction: 'love' }, 'PUT')).statusCode).toBe(404);
+
+    await h.app.inject({ method: 'DELETE', url: `/places/${id}`, headers: ola.headers });
+    expect((await h.sql`select count(*)::int as n from place_reactions`)[0]!.n).toBe(0);
+  });
+
   it('mentions notify the mentioned once, instead of the comment notification', async () => {
     const ola = await login(h.app, 'ola@gmail.com');
     const kuba = await login(h.app, 'kuba@gmail.com');
