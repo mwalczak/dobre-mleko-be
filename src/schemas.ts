@@ -173,12 +173,12 @@ export const Scores = z.object({ vibe: score, offer: score, service: score.nulla
   description: 'vibe = klimat, offer = oferta, service = obsługa, value = wartość; null = nie dotyczy',
 });
 
-export const REACTIONS = ['love', 'like', 'haha', 'wow', 'yum', 'fire', 'sad'] as const;
+export const REACTIONS = ['love', 'like', 'haha', 'wow', 'yum', 'fire', 'sad', 'cancel'] as const;
 const Reaction = z.enum(REACTIONS).meta({
   id: 'Reaction',
   description:
     'A reaction to a comment, in display order: love (Uwielbiam), like (Super), haha, wow, yum (Pycha), fire ' +
-    '(Petarda), sad (Smutno). The apps draw them as Bauhaus glyphs.',
+    '(Petarda), sad (Smutno), cancel (Cancel, ❌). The apps draw them as Bauhaus glyphs.',
 });
 
 export const Comment = z

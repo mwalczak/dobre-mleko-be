@@ -128,6 +128,9 @@ describe('reactions and mentions', () => {
     const place = (await h.app.inject({ method: 'GET', url: `/places/${id}`, headers: tomek.headers })).json();
     expect(place.comments[0].my_reaction).toBe('fire');
     expect((await post(kuba, `/comments/${c.id}/reaction`, { reaction: 'meh' }, 'PUT')).statusCode).toBe(422);
+    expect((await post(kuba, `/comments/${c.id}/reaction`, { reaction: 'cancel' }, 'PUT')).json().my_reaction).toBe(
+      'cancel',
+    );
   });
 
   it('mentions notify the mentioned once, instead of the comment notification', async () => {

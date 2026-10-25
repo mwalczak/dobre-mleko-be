@@ -232,7 +232,7 @@ comments (on places they added, commented on or saved), gold stars, joins and me
 ### Reactions to comments
 
 `PUT /comments/{id}/reaction {reaction}` — one per member and comment (another replaces it), `DELETE` takes it back.
-Reactions: `love`, `like`, `haha`, `wow`, `yum`, `fire`, `sad` (in display order; the apps draw Bauhaus glyphs).
+Reactions: `love`, `like`, `haha`, `wow`, `yum`, `fire`, `sad`, `cancel` (❌; in display order; the apps draw Bauhaus glyphs).
 Every comment carries `reactions` (count and names per reaction), `my_reaction` and `mentions`.
 
 ### Sharing places
