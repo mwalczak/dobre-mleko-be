@@ -374,7 +374,8 @@ The web app's `/report` page uses all three.
 
 ```
 src/
-  server.ts          startup: config, migrations, admins, hourly cleanup of unattached uploads
+  server.ts          startup: config, migrations, admins, hourly cleanup of unattached uploads and address towns
+  address-towns.ts   adds the town to addresses the mobile apps saved as street only (Nominatim, production only)
   app.ts             Fastify app, error format, OpenAPI
   routes/            one file per area (auth, me, places, ratings, comments, photos, stats, meta, admin, reports)
   pmo.ts             client for PMO, the issue tracker behind /reports

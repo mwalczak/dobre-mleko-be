@@ -1,5 +1,6 @@
 import { constants } from 'node:fs';
 import { access, mkdir } from 'node:fs/promises';
+import { fillAddressTowns } from './address-towns.js';
 import { buildApp } from './app.js';
 import { ensureAdmins } from './auth.js';
 import { loadConfig } from './config.js';
@@ -31,8 +32,19 @@ const cleanup = setInterval(
 );
 cleanup.unref();
 
+// Towns for addresses the mobile apps saved as street and number only, a batch an hour (see address-towns.ts);
+// in production only, so local development never calls OpenStreetMap.
+const fillTowns = () =>
+  fillAddressTowns(sql, { limit: 100 }).then(
+    (n) => n && app.log.info({ changed: n }, 'towns added to addresses'),
+    (err) => app.log.error(err, 'filling address towns failed'),
+  );
+const towns = config.NODE_ENV === 'production' ? setInterval(fillTowns, 3600 * 1000) : undefined;
+towns?.unref();
+
 const shutdown = async () => {
   clearInterval(cleanup);
+  clearInterval(towns);
   await app.close();
   await sql.end({ timeout: 5 });
   process.exit(0);
@@ -41,3 +53,4 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 await app.listen({ host: '0.0.0.0', port: config.PORT });
+if (config.NODE_ENV === 'production') void fillTowns();
