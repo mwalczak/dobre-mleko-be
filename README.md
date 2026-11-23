@@ -414,6 +414,11 @@ k3s server over SSH (same setup as `ip`): the `dobre-mleko` namespace with a Pos
 a 10 Gi photo volume, the API and a Traefik ingress with a cert-manager certificate. The API uses the `Recreate`
 strategy because the photo volume is mounted by one pod at a time, so a deploy has a few seconds of downtime.
 
+A scheduled run every Monday at 03:27 UTC rebuilds the latest `main` without cache (fresh `node:22-alpine`, Alpine
+package upgrades) and redeploys it, if CI passed on that commit. Image tags are `<sha>-<run number>`, so the rebuild
+of an unchanged commit still rolls out. GitHub turns schedules off after 60 days without commits (Actions →
+Build and deploy → Enable workflow).
+
 Repository secrets: `VPS_HOST`, `VPS_SSH_KEY`, `POSTGRES_PASSWORD` (letters and digits only, it goes into a URL:
 `openssl rand -hex 24`), `JWT_SECRET` (`openssl rand -base64 48`), `ADMIN_EMAILS`.
 Repository variables: `API_HOST` (the API's domain), `GOOGLE_CLIENT_IDS`, `GOOGLE_WEB_CLIENT_ID`, optionally

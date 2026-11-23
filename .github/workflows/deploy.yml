@@ -6,21 +6,40 @@ on:
     branches: [main]
     types: [completed]
   workflow_dispatch:
+  # Weekly rebuild (Mondays 03:27 UTC) to pick up base image and Alpine security fixes
+  schedule:
+    - cron: '27 3 * * 1'
 
 permissions:
   contents: read
   packages: write
+  actions: read
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # Unique per run, so a scheduled rebuild of the same commit still rolls out
+      TAG: ${{ github.event.workflow_run.head_sha || github.sha }}-${{ github.run_number }}
     steps:
+      # The schedule rebuilds the latest commit on main: only if CI passed on it (as a push-triggered deploy).
+      - name: Check CI passed on this commit
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$SHA" --limit 1 \
+            --json conclusion --jq '.[0].conclusion')
+          if [ "$conclusion" != success ]; then
+            echo "::error::CI on $SHA is '${conclusion:-missing}': not rebuilding"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SHA }}
@@ -37,8 +56,10 @@ jobs:
         with:
           context: .
           push: true
+          pull: true
+          no-cache: true
           tags: |
-            ${{ env.IMAGE }}:${{ env.SHA }}
+            ${{ env.IMAGE }}:${{ env.TAG }}
             ${{ env.IMAGE }}:latest
 
       - name: Set up SSH
@@ -67,7 +88,7 @@ jobs:
         run: |
           # k8s.yaml starts with the Namespace, so apply creates it before the Secret below.
           {
-            sed -e "s|IMAGE_PLACEHOLDER|${IMAGE}:${SHA}|" -e "s|DEPLOY_ID_PLACEHOLDER|\"${SHA}-${GITHUB_RUN_ID}\"|" \
+            sed -e "s|IMAGE_PLACEHOLDER|${IMAGE}:${TAG}|" -e "s|DEPLOY_ID_PLACEHOLDER|\"${SHA}-${GITHUB_RUN_ID}\"|" \
                 -e "s|HOST_PLACEHOLDER|${API_HOST}|g" k8s.yaml
             echo '---'
             kubectl create secret generic dobre-mleko --namespace dobre-mleko --dry-run=client -o yaml \
